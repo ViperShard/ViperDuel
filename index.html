@@ -511,9 +511,10 @@ window.addEventListener('keydown',e=>{ keys.add(e.code); if(PREVENT.has(e.code))
 window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>keys.clear());
 // grab the first connected pad not already claimed by the other gamepad player
-function padConnected(p){ return p && p.connected!==false; }
-// every connected pad, in browser index order
-function connectedPads(){ const pads=navigator.getGamepads?navigator.getGamepads():[]; const list=[]; for(let i=0;i<pads.length;i++) if(padConnected(pads[i])) list.push(pads[i]); return list; }
+// plain truthy check — matches the original working code (do NOT filter on .connected; Edge can report a usable pad without connected===true)
+function padConnected(p){ return !!p; }
+// every present pad, in browser index order
+function connectedPads(){ const pads=navigator.getGamepads?navigator.getGamepads():[]; const list=[]; for(let i=0;i<pads.length;i++) if(pads[i]) list.push(pads[i]); return list; }
 // which gamepad-player is this (0 = first to use a controller, 1 = second)
 function gamepadRank(e){ let r=0; for(const h of humans){ if(h.scheme==='gamepad'){ if(h===e) return r; r++; } } return 0; }
 function readInput(e){
