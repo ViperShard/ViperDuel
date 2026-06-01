@@ -735,7 +735,7 @@ function updateGpDiag(){
   if(!r.hasApi) msg=`⚠ This view has <b>no Gamepad API</b> — open the game in a normal <b>Chrome</b> or <b>Firefox</b> window.`;
   else if(r.inIframe||r.embeddedApp) msg=`⚠ Looks like ViperDuel is running <b>inside an embedded browser</b> (in-app / VS&nbsp;Code Simple Browser / iframe), where controllers are blocked. Open <b>vipershard.github.io/ViperDuel</b> in a normal <b>Chrome or Firefox</b> window.`;
   else if(!r.secure) msg=`⚠ Controllers require a secure (https) page.`;
-  else msg=`No controllers seen yet in <b>${r.browser}</b>. <b>Click this page once, then press a button (e.g. A) on each controller</b> — the press must happen while <b>this tab is focused</b>. Pressing buttons while another window/app is focused won't register.`;
+  else msg=`No controllers seen yet in <b>${r.browser}</b>. Click this page, then press <b>A</b> on each controller (with this tab focused). <b>Still nothing?</b> Xbox pads over <b>Bluetooth</b> often aren't exposed to Edge/Chrome — connect them with a <b>USB cable</b> or the <b>Xbox wireless dongle</b>, or try <b>Firefox</b>.`;
   el.innerHTML=msg+`<br><span style="opacity:.65;font-size:11px">focus: ${r.focused?'yes':'NO → click the page first'} · embedded: ${(r.inIframe||r.embeddedApp)?'yes':'no'} · https: ${r.secure?'yes':'no'} · api: ${r.hasApi?'yes':'no'} · ${r.browser}</span>`;
 }
 
