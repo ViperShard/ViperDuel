@@ -521,6 +521,16 @@ function buildSoldier(teamGlow){
   g.scale.setScalar(1.25);
   return { group:g };
 }
+// cheap soldier for enemy hordes (few meshes -> handles 30+ on screen)
+const _liteSuit=new THREE.MeshStandardMaterial({color:0x5a2622, metalness:0.2, roughness:0.85});
+const _liteGear=new THREE.MeshStandardMaterial({color:0x2a1815, metalness:0.3, roughness:0.7});
+const _liteTorso=new THREE.BoxGeometry(1.5,2.0,0.9), _liteHelm=new THREE.SphereGeometry(0.6,8,6), _liteRifle=new THREE.BoxGeometry(0.2,0.28,2.2);
+function buildSoldierLite(teamGlow){ const g=new THREE.Group();
+  const t=new THREE.Mesh(_liteTorso,_liteSuit); t.position.y=0.4; g.add(t);
+  const h=new THREE.Mesh(_liteHelm,_liteGear); h.position.y=1.8; g.add(h);
+  const band=new THREE.Mesh(new THREE.BoxGeometry(1.55,0.22,0.95), new THREE.MeshStandardMaterial({color:teamGlow,emissive:teamGlow,emissiveIntensity:0.7})); band.position.y=1.2; g.add(band);
+  const r=new THREE.Mesh(_liteRifle,_liteGear); r.position.set(0.5,0.5,-0.9); g.add(r);
+  g.scale.setScalar(1.25); return { group:g }; }
 
 // ---- FPS view-model (your own gun + arms, only your eye sees it) ----
 function buildViewModel(){
@@ -833,7 +843,8 @@ showEyes(false);
 //  GAME STATE / MODE
 // =====================================================================
 let gameState='loading', mode='versus';
-let teamLives=0, wave=0, waveState='', waveTimer=0;
+let teamLives=0, wave=0, waveState='', waveTimer=0, waveQuota=0, waveSpawned=0, waveKilled=0, spawnTimer=0;
+function maxAliveBots(){ return Math.min(38, 24 + NUM_PLAYERS*4 + wave); }   // concurrency cap (perf)
 const setup=document.getElementById('setup'), gameoverEl=document.getElementById('gameover'), startBtn=document.getElementById('startBtn');
 
 function headingToCenter(pos){ const dx=-pos.x,dz=-pos.z,len=Math.hypot(dx,dz)||1; return Math.atan2(-dx/len,-dz/len); }
@@ -872,10 +883,11 @@ const ENEMY_PLANES=['scout','falcon','striker','inter'];
 function spawnBot(w){
   const e=baseEntity(); e.team='enemy'; e.ai={ skill:clamp(0.6+w*0.05,0.6,1.3) };
   const glow=TEAMCOL.enemy.glow; e.tracer=glow;
+  // mostly foot soldiers, with some armor + air for flavor
   const r=Math.random();
-  e.kind = (w>=2 && r<0.34) ? 'tank' : (w>=2 && r<0.62) ? 'infantry' : 'air';
+  e.kind = r<0.74 ? 'infantry' : (r<0.88 ? 'air' : 'tank');
   if(e.kind==='tank'){ e.def={livery:0x5a2622}; e.stats={...TANK, hull:Math.round(TANK.hull*(0.7+w*0.08)), shellDmg:TANK.shellDmg*0.7, mgDmg:TANK.mgDmg*0.7}; e.visuals=buildTank(glow); }
-  else if(e.kind==='infantry'){ e.def={livery:0x4a2622}; e.stats={...INF, hull:Math.round(INF.hull*(0.8+w*0.06)), rifleDmg:INF.rifleDmg*0.6}; e.visuals=buildSoldier(glow); }
+  else if(e.kind==='infantry'){ e.def={livery:0x5a2622}; e.stats={...INF, hull:Math.round(INF.hull*(0.8+w*0.05)), rifleDmg:INF.rifleDmg*0.55}; e.visuals=buildSoldierLite(glow); }
   else { const base=PLANES.find(p=>p.id===ENEMY_PLANES[Math.min(ENEMY_PLANES.length-1,Math.floor(Math.random()*Math.min(ENEMY_PLANES.length,1+Math.floor(w/2))))]);
     const def={...base, livery:0x7a2a2a, stats:{...base.stats, hull:Math.round(base.stats.hull*(0.8+w*0.1)), dmg:base.stats.dmg*0.6}}; e.def=def; e.stats=def.stats; e.visuals=buildPlaneModel(def,glow); }
   scene.add(e.visuals.group);
@@ -906,8 +918,8 @@ function aiInputGround(e,dt){
   return inp;
 }
 function aiFor(e,dt){ return e.kind==='air' ? aiInput(e,dt) : aiInputGround(e,dt); }
-function startWave(){ wave++; const count=Math.min(3+wave*2,12); for(let i=0;i<count;i++) spawnBot(wave);
-  announce('WAVE '+wave); waveState='active'; }
+function startWave(){ wave++; waveQuota = 20 + wave*10; waveSpawned=0; waveKilled=0; spawnTimer=0;   // 30, 40, 50, ... hostiles, mostly infantry
+  announce('WAVE '+wave+' — '+waveQuota+' HOSTILES'); waveState='active'; }
 
 function clearWorld(){ for(const b of bullets) scene.remove(b.mesh); bullets.length=0;
   for(const m of missiles) scene.remove(m.mesh); missiles.length=0;
@@ -1661,8 +1673,8 @@ function updateEyeHUD(e, vw, vh){
 function updateCenterHud(){
   if(mode==='versus'){ const sc=P().map(h=>`<span style="color:${TEAMCOL[h.num].hex}">${h.score}</span>`).join(' <span style="color:#8da0c5">·</span> ');
     centerHud.innerHTML=`<div class="big">${sc}</div><div class="sub">FIRST TO ${CFG.killsToWin}</div>`; }
-  else { const total=P().reduce((a,h)=>a+h.score,0);
-    centerHud.innerHTML=`<div class="big" style="color:#ffd479">WAVE ${wave}</div><div class="sub">LIVES ${teamLives} &nbsp;·&nbsp; ${total} DOWNED &nbsp;·&nbsp; ${bots.filter(b=>b.alive).length} LEFT</div>`; }
+  else { const total=P().reduce((a,h)=>a+h.score,0), remain=Math.max(0,waveQuota-waveKilled);
+    centerHud.innerHTML=`<div class="big" style="color:#ffd479">WAVE ${wave}</div><div class="sub">LIVES ${teamLives} &nbsp;·&nbsp; ${total} DOWNED &nbsp;·&nbsp; ${remain} HOSTILES LEFT</div>`; }
 }
 
 // =====================================================================
@@ -1687,15 +1699,23 @@ function renderMenu(){ const w=window.innerWidth,h=window.innerHeight; menuCam.a
 //  COOP WAVE LOGIC
 // =====================================================================
 function updateCoop(dt){
-  // remove dead bots
-  for(let i=bots.length-1;i>=0;i--){ if(bots[i].dead){ scene.remove(bots[i].visuals.group); bots.splice(i,1); } }
+  // remove dead bots (and count toward the wave quota)
+  for(let i=bots.length-1;i>=0;i--){ if(bots[i].dead){ scene.remove(bots[i].visuals.group); bots.splice(i,1); if(waveState==='active') waveKilled++; } }
   // respawn humans that still have lives
   for(const hm of P()){ if(!hm.alive && !hm.dead && hm.respawnTimer<=0){ respawnHuman(hm); } }
   if(P().every(h=>h.dead)){ endGame(); return; }
   // wave flow
   if(waveState==='intermission'){ waveTimer-=dt; if(waveTimer<=0) startWave(); }
-  else if(waveState==='active'){ if(bots.length===0){ waveState='intermission'; waveTimer=3.5; awardXp(wave*12,null);
-      teamLives=Math.min(9,teamLives+1); toast('Wave '+wave+' cleared! +1 life'); } }
+  else if(waveState==='active'){
+    // keep the field full: trickle reinforcements up to the concurrency cap until the whole wave is spawned
+    spawnTimer-=dt;
+    if(waveSpawned<waveQuota && bots.length<maxAliveBots() && spawnTimer<=0){
+      const burst=Math.min(3, waveQuota-waveSpawned, maxAliveBots()-bots.length);
+      for(let k=0;k<burst;k++){ spawnBot(wave); waveSpawned++; } spawnTimer=0.22;
+    }
+    if(waveKilled>=waveQuota){ waveState='intermission'; waveTimer=3.5; awardXp(wave*12,null);
+      teamLives=Math.min(12,teamLives+2); toast('Wave '+wave+' cleared! +2 lives'); }
+  }
 }
 
 // =====================================================================
