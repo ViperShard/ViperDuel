@@ -509,8 +509,18 @@ const PREVENT=new Set(['Space','Enter','ArrowUp','ArrowDown','ArrowLeft','ArrowR
 window.addEventListener('keydown',e=>{ keys.add(e.code); if(PREVENT.has(e.code)) e.preventDefault(); });
 window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>keys.clear());
+// grab the first connected pad not already claimed by the other gamepad player
+function claimGamepad(e){
+  const pads=navigator.getGamepads?navigator.getGamepads():[];
+  const used=new Set();
+  for(const o of humans){ if(o!==e && o.scheme==='gamepad' && o.gamepadIndex>=0 && pads[o.gamepadIndex]) used.add(o.gamepadIndex); }
+  for(let i=0;i<pads.length;i++){ if(pads[i] && !used.has(i)){ e.gamepadIndex=i; return pads[i]; } }
+  return null;
+}
 function readInput(e){
-  if(e.scheme==='gamepad'){ const pads=navigator.getGamepads?navigator.getGamepads():[]; const gp=pads&&pads[e.gamepadIndex];
+  if(e.scheme==='gamepad'){ const pads=navigator.getGamepads?navigator.getGamepads():[];
+    let gp = (e.gamepadIndex>=0) ? pads[e.gamepadIndex] : null;
+    if(!gp) gp = claimGamepad(e);   // self-heal: bind a controller as soon as it appears (after its first button press)
     if(!gp) return {pitch:0,roll:0,fire:false,boost:false,missile:false};
     const dz=CFG.deadzone; let lx=gp.axes[0]||0,ly=gp.axes[1]||0; if(Math.abs(lx)<dz)lx=0; if(Math.abs(ly)<dz)ly=0;
     const fire=(gp.buttons[0]&&gp.buttons[0].pressed)||(gp.buttons[7]&&gp.buttons[7].value>0.3);
@@ -691,12 +701,16 @@ function refreshControlUI(){
     btn.classList.toggle('sel', me.scheme===scheme);
     btn.classList.toggle('disabled', (scheme==='wasd'||scheme==='ijkl') && other.scheme===scheme); });
   humans.forEach((p,i)=>{ const h=document.getElementById('p'+(i+1)+'hint');
-    if(p.scheme==='gamepad'){ const n=(navigator.getGamepads?[...navigator.getGamepads()]:[]).filter(Boolean).length; h.textContent=n>i?'🎮 Controller ready':'⚠ Connect controller & press a button'; }
-    else if(p.scheme) h.textContent='Ready'; else h.textContent='Choose controls'; });
+    if(p.scheme==='gamepad'){ if(p.gamepadIndex<0) claimGamepad(p);
+      const pads=navigator.getGamepads?navigator.getGamepads():[];
+      h.textContent=(p.gamepadIndex>=0 && pads[p.gamepadIndex]) ? '🎮 Controller '+(p.gamepadIndex+1)+' ready' : '⚠ Press a button on this controller to connect it';
+    } else if(p.scheme) h.textContent='Ready'; else h.textContent='Choose controls'; });
   validateStart();
 }
-function assignGamepads(){ const pads=navigator.getGamepads?[...navigator.getGamepads()]:[]; const idx=pads.map((g,i)=>g?i:-1).filter(i=>i>=0); let c=0;
-  humans.forEach(p=>{ if(p.scheme==='gamepad'){ p.gamepadIndex=idx[c]!==undefined?idx[c]:c; c++; } }); }
+function assignGamepads(){
+  humans.forEach(p=>{ if(p.scheme==='gamepad') p.gamepadIndex=-1; });   // clear, then claim distinct connected pads
+  humans.forEach(p=>{ if(p.scheme==='gamepad') claimGamepad(p); });
+}
 
 document.querySelectorAll('.opt').forEach(btn=> btn.addEventListener('click',()=>{ if(btn.classList.contains('disabled')) return;
   const pl=+btn.dataset.player, s=btn.dataset.scheme; humans[pl-1].scheme=humans[pl-1].scheme===s?null:s; refreshControlUI(); }));
@@ -706,8 +720,8 @@ document.querySelectorAll('.mode').forEach(m=>m.addEventListener('click',()=>{ m
 startBtn.addEventListener('click',()=>{ if(!startBtn.disabled){ assignGamepads(); startGame(); } });
 document.getElementById('rematchBtn').addEventListener('click',()=>{ assignGamepads(); startGame(); });
 document.getElementById('menuBtn').addEventListener('click',()=>{ gameState='setup'; gameoverEl.classList.add('hidden'); showEyes(false); setup.classList.remove('hidden'); refreshPilotBar(); renderPlaneSel(0); renderPlaneSel(1); refreshControlUI(); });
-window.addEventListener('gamepadconnected',()=>{ if(gameState==='setup') refreshControlUI(); });
-window.addEventListener('gamepaddisconnected',()=>{ if(gameState==='setup') refreshControlUI(); });
+window.addEventListener('gamepadconnected',e=>{ humans.forEach(p=>{ if(p.scheme==='gamepad'&&p.gamepadIndex<0) claimGamepad(p); }); if(gameState==='setup') refreshControlUI(); });
+window.addEventListener('gamepaddisconnected',e=>{ humans.forEach(p=>{ if(p.scheme==='gamepad'&&p.gamepadIndex===e.gamepad.index) p.gamepadIndex=-1; }); if(gameState==='setup') refreshControlUI(); });
 
 function updateBars(e){ if(!e.hud) return; e.hud.hullBar.style.width=Math.max(0,e.hull/e.stats.hull*100)+'%'; e.hud.score.textContent=e.score; }
 
@@ -958,7 +972,7 @@ function updateCoop(dt){
 // =====================================================================
 //  MAIN LOOP
 // =====================================================================
-const clock=new THREE.Clock();
+const clock=new THREE.Clock(); let gpPollT=0;
 function animate(){ requestAnimationFrame(animate);
   let dt=clock.getDelta(); if(dt>0.05) dt=0.05;
   // announce/toast fade
@@ -978,7 +992,9 @@ function animate(){ requestAnimationFrame(animate);
     updateEyeHUD(humans[1],w-half,h);
     updateCenterHud();
     renderSplit();
-  } else renderMenu();
+  } else { renderMenu();
+    if(gameState==='setup'){ gpPollT-=dt; if(gpPollT<=0){ gpPollT=0.4; refreshControlUI(); } }
+  }
 }
 
 window.addEventListener('resize',()=>renderer.setSize(window.innerWidth,window.innerHeight));
