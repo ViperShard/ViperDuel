@@ -50,9 +50,9 @@
   #p2card .opt.sel{ background:rgba(255,122,60,0.22); border-color:var(--p2); }
   .opt.disabled{ opacity:.35; cursor:not-allowed; }
 
-  .classsel { margin-top:12px; display:flex; gap:6px; }
-  .cbtn { flex:1; padding:8px 4px; border-radius:9px; border:1px solid rgba(255,255,255,0.16); background:rgba(255,255,255,0.05);
-          color:#dce6ff; font-size:13px; font-weight:600; cursor:pointer; transition:.12s; }
+  .classsel { margin-top:12px; display:flex; gap:6px; flex-wrap:wrap; }
+  .cbtn { flex:1 1 28%; min-width:60px; padding:8px 4px; border-radius:9px; border:1px solid rgba(255,255,255,0.16); background:rgba(255,255,255,0.05);
+          color:#dce6ff; font-size:12px; font-weight:600; cursor:pointer; transition:.12s; }
   .cbtn:hover { background:rgba(255,255,255,0.1); }
   #p1card .cbtn.sel { background:rgba(52,198,255,0.25); border-color:var(--p1); }
   #p2card .cbtn.sel { background:rgba(255,122,60,0.25); border-color:var(--p2); }
@@ -301,8 +301,9 @@ const INF={ hull:90, walk:17, run:32, jump:12, lookYaw:2.5, lookPitch:1.35, eye:
   rifleDmg:14, rifleCd:0.09, rifleSpeed:1400, mag:30, reloadT:1.8, missiles:0 };
 const NAVY={ hull:1100, speed:32, rev:15, turn:0.5, turretYaw:1.1, turretPitch:0.5, pMin:-0.05, pMax:0.5,
   mainReload:2.6, shellDmg:170, shellSplash:48, shellSpeed:620, torpReload:5, torpDmg:300, torpSpeed:95, height:0, missiles:0 };
+const AAGUN={ hull:240, fireCd:0.085, flakDmg:13, flakSpeed:780, yawRate:2.0, pitchRate:1.7, pMin:-0.05, pMax:1.45, missiles:0 };
 const GRAV=34;
-const CLASSES=[ {id:'air',label:'✈ Air'}, {id:'tank',label:'🛡 Tank'}, {id:'infantry',label:'🪖 Infantry'}, {id:'navy',label:'🚢 Navy'} ];
+const CLASSES=[ {id:'air',label:'✈ Air'}, {id:'tank',label:'🛡 Tank'}, {id:'infantry',label:'🪖 Infantry'}, {id:'navy',label:'🚢 Navy'}, {id:'aa',label:'🎯 AA Gun'} ];
 
 function xpForLevel(L){ return 50*L*(L-1); }            // L1=0,L2=100,L3=300,L4=600,L5=1000,L6=1500,L7=2100
 function levelForXp(xp){ let L=1; while(xpForLevel(L+1)<=xp) L++; return L; }
@@ -849,6 +850,7 @@ function placeHuman(e, pos, heading){
   if(e.kind==='air'){ e.speed=e.stats.speed; e.boostFuel=1; e.ammo=e.stats.missiles; e.reload=CFG.missileReload; e.overcharge=0; }
   else if(e.kind==='tank'){ e.speed=0; e.ammo=20; e.pos.y=groundLevel(pos.x,pos.z); }
   else if(e.kind==='navy'){ e.speed=0; e.pos.y=CFG.seaLevel; }
+  else if(e.kind==='aa'){ e.speed=0; e.pos.y=groundLevel(pos.x,pos.z); e.turretPitch=0.6; }
   else { e.speed=0; e.mag=INF.mag; e.pos.y=groundLevel(pos.x,pos.z)+INF.stand; }
 }
 function spawnHuman(e, idx){ const side=idx===0?-1:1; let pos;
@@ -924,6 +926,7 @@ function startGame(){
     if(e.kind==='tank'){ e.visuals=buildTank(glow); e.def={livery:0x4a5238}; e.stats=TANK; e.tracer=glow; scene.add(e.visuals.group); }
     else if(e.kind==='infantry'){ e.visuals=buildSoldier(glow); e.def={livery:0x3a4a32}; e.stats=INF; e.tracer=glow; scene.add(e.visuals.group); }
     else if(e.kind==='navy'){ e.visuals=buildShip(glow); e.def={livery:0x47505a}; e.stats=NAVY; e.tracer=glow; scene.add(e.visuals.group); }
+    else if(e.kind==='aa'){ e.visuals=buildManAA(glow); e.def={livery:0x44483a}; e.stats=AAGUN; e.tracer=glow; scene.add(e.visuals.group); }
     else { buildVisualsFor(e, PLANES[e.planeIdx], glow); }
     e.visuals.group.traverse(o=>o.layers.set(e.num));   // own model on its own render layer (cockpit/FPS hide)
     spawnHuman(e,i); updateBars(e); });
@@ -1230,6 +1233,7 @@ function updateActor(e,input,dt){
   if(e.kind==='tank') updateTank(e,input,dt);
   else if(e.kind==='infantry') updateInfantry(e,input,dt);
   else if(e.kind==='navy') updateNavy(e,input,dt);
+  else if(e.kind==='aa') updateManAA(e,input,dt);
   else updateFlight(e,input,dt);
 }
 function updateTank(e,input,dt){
@@ -1433,6 +1437,37 @@ function updateTorps(dt){ for(let i=torps.length-1;i>=0;i--){ const t=torps[i]; 
 function findWater(){ for(let t=0;t<80;t++){ const a=Math.random()*6.28,d=CFG.groundRadius+Math.random()*(CFG.playRadius*0.85-CFG.groundRadius); const x=Math.cos(a)*d,z=Math.sin(a)*d; if(terrainHeight(x,z)<-25) return new THREE.Vector3(x,CFG.seaLevel,z); } return new THREE.Vector3(CFG.playRadius*0.6,CFG.seaLevel,0); }
 
 // =====================================================================
+//  PLAYER-MANNED AA GUN (emplaced flak)
+// =====================================================================
+function buildManAA(teamGlow){ const g=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:0x44483a,metalness:0.5,roughness:0.6});
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(2.6,3.4,1.6,12),mat); base.position.y=0.8; g.add(base);
+  const ring=new THREE.Mesh(new THREE.CylinderGeometry(2,2,0.6,12),new THREE.MeshStandardMaterial({color:0x2a2e26,metalness:0.5,roughness:0.6})); ring.position.y=1.7; g.add(ring);
+  const turret=new THREE.Group(); turret.position.y=2.0; g.add(turret);
+  turret.add(new THREE.Mesh(new THREE.BoxGeometry(2.2,1,2.2),mat));
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.8,1.2),new THREE.MeshStandardMaterial({color:0x2a2e26})); seat.position.set(0,0.8,1); turret.add(seat);
+  const barrel=new THREE.Group(); barrel.position.set(0,0.6,-0.4); turret.add(barrel);
+  for(const sx of [-0.45,0.45]){ const b=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.18,6,8),new THREE.MeshStandardMaterial({color:0x1c1f25,metalness:0.6,roughness:0.4})); b.rotation.x=Math.PI/2; b.position.set(sx,0,-3); barrel.add(b); }
+  const glow=makeGlow(teamGlow,5); glow.position.y=3.4; g.add(glow);
+  g.scale.setScalar(1.3); return { group:g, turret, barrel }; }
+function updateManAA(e,input,dt){ const isPad=e.scheme==='gamepad', s=e.stats;
+  e.aimRaw=input.aim||0; e.aim+=((e.aimRaw)-e.aim)*(1-Math.exp(-dt*12));
+  if(e.alive){
+    const yawIn=isPad?(input.lookX||0):(input.roll||0), pitchIn=isPad?(input.lookY||0):(input.pitch||0);
+    e.turretYaw -= yawIn*s.yawRate*dt;
+    e.turretPitch += pitchIn*s.pitchRate*dt; e.turretPitch=clamp(e.turretPitch,s.pMin,s.pMax);
+    e.mgCd-=dt; if(input.fire && e.mgCd<=0){ fireManFlak(e); e.mgCd=s.fireCd; }
+    if(e.invuln>0){ e.invuln-=dt; e.visuals.group.visible=(Math.floor(e.invuln*12)%2===0); if(e.invuln<=0)e.visuals.group.visible=true; }
+  } else e.respawnTimer-=dt;
+  e.visuals.group.position.copy(e.pos); e.visuals.group.rotation.set(0,0,0);
+  if(e.visuals.turret){ e.visuals.turret.rotation.y=e.turretYaw; e.visuals.barrel.rotation.x=e.turretPitch; }
+  e.quat.setFromEuler(_ge.set(e.turretPitch,e.turretYaw,0,'YXZ')); }
+function fireManFlak(e){ const dir=aimVec(e.turretYaw,e.turretPitch);
+  const o=e.pos.clone().add(new THREE.Vector3(0,3.4,0)).addScaledVector(dir,6);
+  const mesh=new THREE.Mesh(bulletGeo,new THREE.MeshBasicMaterial({color:e.tracer,fog:false})); mesh.position.copy(o); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),dir); mesh.scale.setScalar(1.4);
+  scene.add(mesh); bullets.push({mesh,vel:dir.clone().multiplyScalar(e.stats.flakSpeed),life:2.2,team:e.team,owner:e,dmg:e.stats.flakDmg}); sfx.mg(); }
+
+// =====================================================================
 //  CHASE / GROUND CAMERAS
 // =====================================================================
 const _cp=new THREE.Vector3(),_lk=new THREE.Vector3(),_wUp=new THREE.Vector3(0,1,0),_back=new THREE.Vector3(),_rax=new THREE.Vector3(),_he=new THREE.Euler(),_hq=new THREE.Quaternion(),_flat=new THREE.Vector3(),_he2=new THREE.Euler();
@@ -1470,11 +1505,22 @@ function updateNavyCam(e,dt){
   e.cam.up.copy(_wUp); _lk.copy(e.pos).addScaledVector(_wUp,6).addScaledVector(aim,90); e.cam.lookAt(_lk);
   e.cam.fov=lerp(60,28,e.aim);
 }
+function updateAACam(e,dt){
+  e.cam.layers.enable(e.num); e.hud&&e.hud.root.classList.remove('cockpit'); e.cam.near=1; if(e.vm) e.vm.group.visible=false;
+  const tY=e.turretYaw, behind=new THREE.Vector3(Math.sin(tY),0,Math.cos(tY));
+  const dist=lerp(15,9,e.aim), high=lerp(8,5,e.aim);
+  _cp.copy(e.pos).addScaledVector(behind,dist).addScaledVector(_wUp,high);
+  const gl=groundLevel(_cp.x,_cp.z)+2; if(_cp.y<gl)_cp.y=gl;
+  if(!e.camInit){ e.cam.position.copy(_cp); e.camInit=true; } else e.cam.position.lerp(_cp,1-Math.exp(-dt*10));
+  e.cam.up.copy(_wUp); const aim=aimVec(tY,e.turretPitch); _lk.copy(e.pos).addScaledVector(_wUp,4).addScaledVector(aim,90); e.cam.lookAt(_lk);
+  e.cam.fov=lerp(60,24,e.aim);
+}
 const CAM_MAX_YAW=2.6, CAM_MAX_PITCH=0.85;   // how far the right stick can swing the view (rad)
 function updateCamera(e, dt){
   if(e.kind==='tank') return updateTankCam(e,dt);
   if(e.kind==='infantry') return updateInfCam(e,dt);
   if(e.kind==='navy') return updateNavyCam(e,dt);
+  if(e.kind==='aa') return updateAACam(e,dt);
   e.cam.near=1; if(e.vm) e.vm.group.visible=false;
   _fwd.set(0,0,-1).applyQuaternion(e.quat);
   // ease free-look angles (right stick) toward their targets (recenters when released)
@@ -1526,10 +1572,11 @@ function updateEyeHUD(e, vw, vh){
   if(e.kind==='tank'){ h.boostBar.style.width=(clamp(1-Math.max(0,e.mainCd)/TANK.mainReload,0,1)*100)+'%'; h.amt.textContent='🛢 '+e.ammo; h.alt.textContent='—'; h.spd.textContent=Math.round(Math.abs(e.speed)); }
   else if(e.kind==='infantry'){ h.boostBar.style.width=(e.stamina*100)+'%'; h.amt.textContent=(e.reloading>0?'RELOAD…':e.mag+'/'+INF.mag); h.alt.textContent='—'; h.spd.textContent=Math.round(Math.abs(e.speed)); }
   else if(e.kind==='navy'){ h.boostBar.style.width=(clamp(1-Math.max(0,e.mainCd)/NAVY.mainReload,0,1)*100)+'%'; h.amt.textContent=(e.mgCd<=0?'🚢 TORP':'🚢 …'); h.alt.textContent='—'; h.spd.textContent=Math.round(Math.abs(e.speed)); }
+  else if(e.kind==='aa'){ h.boostBar.style.width='100%'; h.amt.textContent='🎯 FLAK'; h.alt.textContent='—'; h.spd.textContent='AA'; }
   else { h.boostBar.style.width=(e.boostFuel*100)+'%'; h.amt.textContent='🚀 '+e.ammo; h.alt.textContent=Math.max(0,Math.round(e.pos.y-groundLevel(e.pos.x,e.pos.z))); h.spd.textContent=Math.round(e.speed); }
   // ADS overlays: sniper scope (infantry) / gunner sight (tank)
   h.scope.classList.toggle('on', e.kind==='infantry' && e.aim>0.5);
-  h.tanksight.classList.toggle('on', (e.kind==='tank'||e.kind==='navy') && e.aim>0.5);
+  h.tanksight.classList.toggle('on', (e.kind==='tank'||e.kind==='navy'||e.kind==='aa') && e.aim>0.5);
 
   // cockpit instruments (artificial horizon + panel gauges)
   if(e.camMode==='cockpit'){
