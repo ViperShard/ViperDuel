@@ -165,6 +165,7 @@
     </div>
   </div>
 
+  <div id="gpDiag" class="small-note" style="color:#8aa0c8; margin-top:0; margin-bottom:10px;"></div>
   <button class="btn" id="startBtn" disabled>Take Off</button>
   <div class="small-note">
     Bank with <span class="keycap">A</span><span class="keycap">D</span> to turn, <span class="keycap">W</span><span class="keycap">S</span> to climb/dive — release to auto-level.
@@ -510,17 +511,18 @@ window.addEventListener('keydown',e=>{ keys.add(e.code); if(PREVENT.has(e.code))
 window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>keys.clear());
 // grab the first connected pad not already claimed by the other gamepad player
+function padConnected(p){ return p && p.connected!==false; }
 function claimGamepad(e){
   const pads=navigator.getGamepads?navigator.getGamepads():[];
   const used=new Set();
-  for(const o of humans){ if(o!==e && o.scheme==='gamepad' && o.gamepadIndex>=0 && pads[o.gamepadIndex]) used.add(o.gamepadIndex); }
-  for(let i=0;i<pads.length;i++){ if(pads[i] && !used.has(i)){ e.gamepadIndex=i; return pads[i]; } }
+  for(const o of humans){ if(o!==e && o.scheme==='gamepad' && o.gamepadIndex>=0 && padConnected(pads[o.gamepadIndex])) used.add(o.gamepadIndex); }
+  for(let i=0;i<pads.length;i++){ if(padConnected(pads[i]) && !used.has(i)){ e.gamepadIndex=i; return pads[i]; } }
   return null;
 }
 function readInput(e){
   if(e.scheme==='gamepad'){ const pads=navigator.getGamepads?navigator.getGamepads():[];
-    let gp = (e.gamepadIndex>=0) ? pads[e.gamepadIndex] : null;
-    if(!gp) gp = claimGamepad(e);   // self-heal: bind a controller as soon as it appears (after its first button press)
+    let gp = (e.gamepadIndex>=0 && padConnected(pads[e.gamepadIndex])) ? pads[e.gamepadIndex] : null;
+    if(!gp){ e.gamepadIndex=-1; gp = claimGamepad(e); }   // self-heal: bind a controller as soon as it appears (after its first button press)
     if(!gp) return {pitch:0,roll:0,fire:false,boost:false,missile:false};
     const dz=CFG.deadzone; let lx=gp.axes[0]||0,ly=gp.axes[1]||0; if(Math.abs(lx)<dz)lx=0; if(Math.abs(ly)<dz)ly=0;
     const fire=(gp.buttons[0]&&gp.buttons[0].pressed)||(gp.buttons[7]&&gp.buttons[7].value>0.3);
@@ -705,11 +707,23 @@ function refreshControlUI(){
       const pads=navigator.getGamepads?navigator.getGamepads():[];
       h.textContent=(p.gamepadIndex>=0 && pads[p.gamepadIndex]) ? '🎮 Controller '+(p.gamepadIndex+1)+' ready' : '⚠ Press a button on this controller to connect it';
     } else if(p.scheme) h.textContent='Ready'; else h.textContent='Choose controls'; });
+  updateGpDiag();
   validateStart();
 }
 function assignGamepads(){
   humans.forEach(p=>{ if(p.scheme==='gamepad') p.gamepadIndex=-1; });   // clear, then claim distinct connected pads
   humans.forEach(p=>{ if(p.scheme==='gamepad') claimGamepad(p); });
+}
+let _gpSig='';
+function updateGpDiag(){
+  const el=document.getElementById('gpDiag'); if(!el) return;
+  const pads=navigator.getGamepads?[...navigator.getGamepads()]:[];
+  const found=pads.map((g,i)=> padConnected(g)?{i,id:(g.id||'gamepad')}:null).filter(Boolean);
+  const sig=found.map(f=>f.i+':'+f.id).join('|');
+  if(sig!==_gpSig){ _gpSig=sig; if(found.length) console.log('[ViperDuel] gamepads detected:', found.map(f=>`#${f.i} ${f.id}`)); }
+  el.innerHTML = found.length
+    ? `🎮 Browser sees <b>${found.length}</b> controller${found.length>1?'s':''}: ${found.map(f=>'#'+f.i+' '+f.id.slice(0,24)).join(' · ')}`
+    : `No controllers seen yet — <b>press a button on each controller</b> so the browser registers it.`;
 }
 
 document.querySelectorAll('.opt').forEach(btn=> btn.addEventListener('click',()=>{ if(btn.classList.contains('disabled')) return;
