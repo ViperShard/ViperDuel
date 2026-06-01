@@ -156,6 +156,11 @@
   .tanksight .tring{ position:absolute; left:50%; top:50%; width:220px; height:220px; transform:translate(-50%,-50%); border:1px solid rgba(255,90,50,0.65); border-radius:50%; box-shadow:0 0 12px rgba(255,80,40,0.3) inset; }
   .tanksight .tchev{ position:absolute; left:50%; top:50%; width:0; height:0; transform:translate(-50%,4px); border-left:9px solid transparent; border-right:9px solid transparent; border-top:14px solid rgba(255,90,50,0.9); }
   .tanksight .th{ position:absolute; left:50%; top:50%; width:300px; max-width:70%; height:1px; transform:translate(-50%,-50%); background:rgba(255,90,50,0.55); }
+  /* bomb sight (CCIP impact pipper) */
+  .bombsight{ position:absolute; display:none; width:40px; height:40px; transform:translate(-50%,-50%); border:2px solid rgba(255,210,80,0.95); border-radius:50%; box-shadow:0 0 9px rgba(255,200,60,0.6); pointer-events:none; }
+  .bombsight:before,.bombsight:after{ content:''; position:absolute; background:rgba(255,210,80,0.95); }
+  .bombsight:before{ left:50%; top:-10px; width:2px; height:60px; transform:translateX(-50%); }
+  .bombsight:after{ top:50%; left:-10px; height:2px; width:60px; transform:translateY(-50%); }
 
   /* center top HUD */
   #centerHud{ position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:5; text-align:center; pointer-events:none; }
@@ -719,11 +724,12 @@ function readInput(e){
     const jump=gp.buttons[0]&&gp.buttons[0].pressed;               // A = jump (infantry)
     const bomb=gp.buttons[2]&&gp.buttons[2].pressed;               // X = drop bombs (air)
     const view=gp.buttons[3]&&gp.buttons[3].pressed;               // Y = toggle cockpit / chase
-    return {pitch:-ly,roll:lx,fire:!!fire,fireRT:!!fireRT,jump:!!jump,bomb:!!bomb,boost:!!boost,missile:!!missile,lookX:rx,lookY:-ry,aim,view:!!view}; }
+    const bombsight=gp.buttons[8]&&gp.buttons[8].pressed;          // View/Back = toggle bomb sight
+    return {pitch:-ly,roll:lx,fire:!!fire,fireRT:!!fireRT,jump:!!jump,bomb:!!bomb,boost:!!boost,missile:!!missile,lookX:rx,lookY:-ry,aim,view:!!view,bombsight:!!bombsight}; }
   if(e.scheme==='wasd') return { pitch:(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0), roll:(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0),
-    fire:keys.has('Space'), fireRT:keys.has('Space'), jump:keys.has('KeyQ'), bomb:keys.has('KeyF'), boost:keys.has('ShiftLeft'), missile:keys.has('KeyQ'), aim:keys.has('KeyE')?1:0, view:keys.has('KeyC') };
+    fire:keys.has('Space'), fireRT:keys.has('Space'), jump:keys.has('KeyQ'), bomb:keys.has('KeyF'), boost:keys.has('ShiftLeft'), missile:keys.has('KeyQ'), aim:keys.has('KeyE')?1:0, view:keys.has('KeyC'), bombsight:keys.has('KeyB') };
   return { pitch:(keys.has('KeyI')?1:0)-(keys.has('KeyK')?1:0), roll:(keys.has('KeyL')?1:0)-(keys.has('KeyJ')?1:0),
-    fire:keys.has('Enter'), fireRT:keys.has('Enter'), jump:keys.has('KeyU'), bomb:keys.has('KeyH'), boost:keys.has('ShiftRight'), missile:keys.has('KeyU'), aim:keys.has('KeyO')?1:0, view:keys.has('KeyM') };
+    fire:keys.has('Enter'), fireRT:keys.has('Enter'), jump:keys.has('KeyU'), bomb:keys.has('KeyH'), boost:keys.has('ShiftRight'), missile:keys.has('KeyU'), aim:keys.has('KeyO')?1:0, view:keys.has('KeyM'), bombsight:keys.has('KeyN') };
 }
 
 // =====================================================================
@@ -809,7 +815,8 @@ function makeEyeHUD(num){ const col=TEAMCOL[num];
       <div class="cg"><b class="c-amm">0</b><span>MSL</span></div>
     </div>
     <div class="scope"><div class="sring"></div><i class="sh"></i><i class="sv"></i></div>
-    <div class="tanksight"><div class="tring"></div><div class="tchev"></div><i class="th"></i></div>`;
+    <div class="tanksight"><div class="tring"></div><div class="tchev"></div><i class="th"></i></div>
+    <div class="bombsight"></div>`;
   document.body.appendChild(eye);
   return { root:eye, hullBar:eye.querySelector('.hull>i'), boostBar:eye.querySelector('.boost>i'), score:eye.querySelector('.killrow b'),
     alt:eye.querySelector('.alt'), spd:eye.querySelector('.spd'), amt:eye.querySelector('.amt'),
@@ -817,7 +824,7 @@ function makeEyeHUD(num){ const col=TEAMCOL[num];
     offarrow:eye.querySelector('.offarrow'), radar:eye.querySelector('.radar').getContext('2d'),
     warning:eye.querySelector('.warning'), hitflash:eye.querySelector('.hitflash'),
     adiInner:eye.querySelector('.adi .inner'), cSpd:eye.querySelector('.c-spd'), cAlt:eye.querySelector('.c-alt'), cHull:eye.querySelector('.c-hull'), cAmm:eye.querySelector('.c-amm'),
-    scope:eye.querySelector('.scope'), tanksight:eye.querySelector('.tanksight') };
+    scope:eye.querySelector('.scope'), tanksight:eye.querySelector('.tanksight'), bombsight:eye.querySelector('.bombsight') };
 }
 humans[0].hud=makeEyeHUD(1); humans[1].hud=makeEyeHUD(2);
 // per-player FPS view-models (each on its own layer so only that pilot's eye sees it)
@@ -1123,6 +1130,7 @@ function updateFlight(e, input, dt){
     if(input.missile && !e._missileHeld && e.ammo>0){ fireMissile(e); }
     e._missileHeld=input.missile;
     e.bombCd=(e.bombCd||0)-dt; if(input.bomb && e.bombCd<=0){ fireBomb(e); e.bombCd=1.3; }   // air-to-ground
+    if(input.bombsight && !e._bsHeld) e.bombSight=!e.bombSight; e._bsHeld=input.bombsight;     // toggle CCIP bomb sight
     if(e.ammo<s.missiles){ e.reload-=dt; if(e.reload<=0){ e.ammo++; e.reload=CFG.missileReload; } }
 
     // timers
@@ -1332,6 +1340,11 @@ function fireBomb(e){ const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(e.quat
   const m=new THREE.Mesh(bombGeo,new THREE.MeshStandardMaterial({color:0x2b2b2b,metalness:0.4,roughness:0.6}));
   m.position.copy(e.pos).addScaledVector(fwd,5); scene.add(m);
   bombs.push({mesh:m,vel:fwd.clone().multiplyScalar(e.speed*0.6).add(new THREE.Vector3(0,-3,0)),life:9,team:e.team,owner:e}); sfx.missile(); }
+// predict where a bomb dropped now would land (CCIP), matching fireBomb initial velocity + gravity
+function bombImpact(e){ const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(e.quat);
+  const p=e.pos.clone(); const v=fwd.multiplyScalar(e.speed*0.6).add(new THREE.Vector3(0,-3,0)); const st=0.06;
+  for(let i=0;i<220;i++){ v.y-=GRAV*st; p.addScaledVector(v,st); const g=Math.max(groundLevel(p.x,p.z),CFG.seaLevel); if(p.y<=g){ p.y=g; return p; } }
+  return null; }
 function updateBombs(dt){ for(let i=bombs.length-1;i>=0;i--){ const b=bombs[i]; b.life-=dt; b.vel.y-=GRAV*dt; b.mesh.position.addScaledVector(b.vel,dt); b.mesh.rotation.x+=dt*1.5; const cur=b.mesh.position;
   if(Math.random()<0.25) smokePuff(cur);
   let boom=b.life<=0 || cur.y<Math.max(groundLevel(cur.x,cur.z),CFG.seaLevel);
@@ -1588,6 +1601,14 @@ function updateEyeHUD(e, vw, vh){
   _fwd.set(0,0,-1).applyQuaternion(e.quat);
   const aimW=e.pos.clone().addScaledVector(_fwd,CFG.aimDistance); _proj.copy(aimW).project(e.cam);
   if(e.kind==='air' && e.camMode!=='cockpit' && aimW.clone().sub(e.cam.position).dot(_cdir)>0){ h.aimdot.style.display='block'; h.aimdot.style.left=((_proj.x*0.5+0.5)*vw)+'px'; h.aimdot.style.top=((-_proj.y*0.5+0.5)*vh)+'px'; } else h.aimdot.style.display='none';
+
+  // bomb sight (CCIP): predicted bomb impact point projected to screen
+  if(e.kind==='air' && e.bombSight){ const imp=bombImpact(e);
+    if(imp){ _proj.copy(imp).project(e.cam); const front=imp.clone().sub(e.cam.position).dot(_cdir)>0;
+      if(front && Math.abs(_proj.x)<=1 && Math.abs(_proj.y)<=1){ h.bombsight.style.display='block'; h.bombsight.style.left=((_proj.x*0.5+0.5)*vw)+'px'; h.bombsight.style.top=((-_proj.y*0.5+0.5)*vh)+'px'; }
+      else h.bombsight.style.display='none'; }
+    else h.bombsight.style.display='none';
+  } else h.bombsight.style.display='none';
 
   const opp=nearestHostile(e);
   if(opp){ _proj.copy(opp.pos).project(e.cam); const front=opp.pos.clone().sub(e.cam.position).dot(_cdir)>0;
