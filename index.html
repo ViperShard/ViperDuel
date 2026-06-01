@@ -928,7 +928,7 @@ function startGame(){
     spawnHuman(e,i); updateBars(e); });
   // both eyes see the world (layer 0) + both planes (layers 1 & 2); cockpit view disables the pilot's own layer
   humans.forEach((h,i)=>{ h.cam.layers.enable(1); h.cam.layers.enable(2); h.cam.layers.enable(3+i); });
-  spawnStructures();
+  try{ spawnStructures(); }catch(err){ console.error('[ViperDuel] spawnStructures failed:', err); }
   if(mode==='coop'){ teamLives=5; wave=0; waveState='intermission'; waveTimer=2.5; }
   setup.classList.add('hidden'); gameoverEl.classList.add('hidden'); showEyes(true);
   gameState='playing'; sfx.init(); sfx.startMusic();
@@ -1351,8 +1351,8 @@ function buildAA(team){ const g=new THREE.Group(); const col=TEAMCOL[team]||TEAM
   return { group:g, turret }; }
 function buildHQ(team){ const g=new THREE.Group(); const col=TEAMCOL[team]||TEAMCOL.enemy;
   const mat=new THREE.MeshStandardMaterial({color:0x555a48,metalness:0.4,roughness:0.7});
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(26,10,26),mat),{position:new THREE.Vector3(0,5,0)}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(8,18,8),mat),{position:new THREE.Vector3(0,14,0)}));
+  const bunker=new THREE.Mesh(new THREE.BoxGeometry(26,10,26),mat); bunker.position.y=5; g.add(bunker);
+  const tower=new THREE.Mesh(new THREE.BoxGeometry(8,18,8),mat); tower.position.y=14; g.add(tower);
   const beacon=makeGlow(col.glow,16); beacon.position.y=30; g.add(beacon);
   for(const sx of [-1,1]) for(const sz of [-1,1]){ const fl=new THREE.Mesh(new THREE.BoxGeometry(1,5,1),new THREE.MeshStandardMaterial({color:col.glow,emissive:col.glow,emissiveIntensity:0.6})); fl.position.set(sx*13,8,sz*13); g.add(fl); }
   return { group:g }; }
