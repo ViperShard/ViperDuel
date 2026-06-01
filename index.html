@@ -152,7 +152,7 @@
       <div class="hint" id="p1hint">Choose controls</div>
       <button class="opt" data-player="1" data-scheme="wasd">⌨ WASD<small>W/S pitch · A/D bank · Space guns · Q missile · LShift boost</small></button>
       <button class="opt" data-player="1" data-scheme="ijkl">⌨ IJKL<small>I/K pitch · J/L bank · Enter guns · U missile · RShift boost</small></button>
-      <button class="opt" data-player="1" data-scheme="gamepad">🎮 Xbox<small>Stick fly · RT/A guns · B missile · LT boost</small></button>
+      <button class="opt" data-player="1" data-scheme="gamepad">🎮 Xbox<small>L-stick fly · R-stick look · RT/A guns · B missile · LT boost</small></button>
       <div class="planesel" id="psel1"></div>
     </div>
     <div class="pcard" id="p2card">
@@ -160,7 +160,7 @@
       <div class="hint" id="p2hint">Choose controls</div>
       <button class="opt" data-player="2" data-scheme="wasd">⌨ WASD<small>W/S pitch · A/D bank · Space guns · Q missile · LShift boost</small></button>
       <button class="opt" data-player="2" data-scheme="ijkl">⌨ IJKL<small>I/K pitch · J/L bank · Enter guns · U missile · RShift boost</small></button>
-      <button class="opt" data-player="2" data-scheme="gamepad">🎮 Xbox<small>Stick fly · RT/A guns · B missile · LT boost</small></button>
+      <button class="opt" data-player="2" data-scheme="gamepad">🎮 Xbox<small>L-stick fly · R-stick look · RT/A guns · B missile · LT boost</small></button>
       <div class="planesel" id="psel2"></div>
     </div>
   </div>
@@ -214,16 +214,30 @@ const TEAMCOL = {
 //  PLANES (data + leveling)
 // =====================================================================
 const PLANES = [
-  { id:'scout',  name:'S-1 Scout',     unlock:1, livery:0xb9c2cf, wing:'straight', engines:1, prop:true,
-    stats:{ speed:150, turn:0.72, pitch:1.15, hull:95,  fire:0.09, dmg:4.0, boost:1.35, missiles:2 } },
-  { id:'falcon', name:'F-9 Falcon',    unlock:1, livery:0x2b4a78, wing:'swept', engines:1, prop:false,
-    stats:{ speed:188, turn:0.98, pitch:1.4, hull:78,  fire:0.07, dmg:4.0, boost:1.5, missiles:2 } },
-  { id:'striker',name:'B-7 Striker',   unlock:2, livery:0x556137, wing:'straight', engines:2, prop:false,
-    stats:{ speed:152, turn:0.55, pitch:0.92, hull:150, fire:0.06, dmg:6.2, boost:1.25, missiles:5 } },
-  { id:'inter',  name:'I-5 Interceptor',unlock:4, livery:0x3a3f4a, wing:'delta', engines:1, prop:false,
-    stats:{ speed:215, turn:0.82, pitch:1.22, hull:88,  fire:0.08, dmg:4.6, boost:1.7, missiles:3 } },
-  { id:'warhawk',name:'X-12 Warhawk',  unlock:6, livery:0x201a22, wing:'fswept', engines:2, prop:false,
-    stats:{ speed:198, turn:1.05, pitch:1.32, hull:115, fire:0.055,dmg:5.6, boost:1.6, missiles:6 } },
+  { id:'scout',  name:'S-1 Scout',      unlock:1,  livery:0xb9c2cf, wing:'straight', engines:1, prop:true,
+    stats:{ speed:150, turn:0.72, pitch:1.15, hull:95,  fire:0.09,  dmg:4.0, boost:1.35, missiles:2 } },
+  { id:'falcon', name:'F-9 Falcon',     unlock:1,  livery:0x2b4a78, wing:'swept', engines:1, prop:false,
+    stats:{ speed:188, turn:0.98, pitch:1.40, hull:78,  fire:0.07,  dmg:4.0, boost:1.50, missiles:2 } },
+  { id:'striker',name:'B-7 Striker',    unlock:2,  livery:0x556137, wing:'straight', engines:2, prop:false,
+    stats:{ speed:152, turn:0.55, pitch:0.92, hull:150, fire:0.06,  dmg:6.2, boost:1.25, missiles:5 } },
+  { id:'vortex', name:'V-3 Vortex',     unlock:3,  livery:0x2f7d77, wing:'delta', engines:1, prop:false,
+    stats:{ speed:198, turn:1.06, pitch:1.34, hull:82,  fire:0.075, dmg:4.2, boost:1.55, missiles:3 } },
+  { id:'inter',  name:'I-5 Interceptor',unlock:4,  livery:0x3a3f4a, wing:'delta', engines:1, prop:false,
+    stats:{ speed:215, turn:0.82, pitch:1.22, hull:88,  fire:0.08,  dmg:4.6, boost:1.70, missiles:3 } },
+  { id:'hammer', name:'H-8 Hammer',     unlock:5,  livery:0x6b4a2a, wing:'straight', engines:2, prop:false,
+    stats:{ speed:158, turn:0.60, pitch:0.95, hull:165, fire:0.05,  dmg:6.7, boost:1.30, missiles:7 } },
+  { id:'warhawk',name:'X-12 Warhawk',   unlock:6,  livery:0x201a22, wing:'fswept', engines:2, prop:false,
+    stats:{ speed:198, turn:1.05, pitch:1.32, hull:115, fire:0.055, dmg:5.6, boost:1.60, missiles:6 } },
+  { id:'tempest',name:'T-7 Tempest',    unlock:7,  livery:0x33405e, wing:'swept', engines:2, prop:false,
+    stats:{ speed:206, turn:1.00, pitch:1.30, hull:108, fire:0.06,  dmg:5.4, boost:1.55, missiles:4 } },
+  { id:'raptor', name:'R-8 Raptor',     unlock:8,  livery:0x2a2f3a, wing:'fswept', engines:1, prop:false,
+    stats:{ speed:212, turn:1.08, pitch:1.38, hull:110, fire:0.055, dmg:5.2, boost:1.65, missiles:5 } },
+  { id:'kestrel',name:'K-10 Kestrel',   unlock:10, livery:0x7a3550, wing:'delta', engines:1, prop:false,
+    stats:{ speed:225, turn:0.90, pitch:1.28, hull:96,  fire:0.07,  dmg:4.8, boost:1.72, missiles:4 } },
+  { id:'ghost',  name:'G-11 Ghost',     unlock:11, livery:0x14161c, wing:'fswept', engines:2, prop:false,
+    stats:{ speed:232, turn:1.00, pitch:1.34, hull:98,  fire:0.06,  dmg:5.0, boost:1.78, missiles:5 } },
+  { id:'zenith', name:'Z-14 Zenith',    unlock:14, livery:0x0e0e16, wing:'fswept', engines:2, prop:false,
+    stats:{ speed:228, turn:1.15, pitch:1.42, hull:138, fire:0.052, dmg:6.4, boost:1.75, missiles:7 } },
 ];
 function xpForLevel(L){ return 50*L*(L-1); }            // L1=0,L2=100,L3=300,L4=600,L5=1000,L6=1500,L7=2100
 function levelForXp(xp){ let L=1; while(xpForLevel(L+1)<=xp) L++; return L; }
@@ -360,6 +374,7 @@ function baseEntity(){
   return { pos:new THREE.Vector3(), quat:new THREE.Quaternion(), heading:0, pitch:0, roll:0, speed:150,
     hull:100, alive:true, invuln:0, cooldown:0, collCooldown:0, respawnTimer:0,
     ctrl:{pitch:0,roll:0}, boostFuel:1, ammo:2, reload:0, smoking:false,
+    lookX:0, lookY:0, camYaw:0, camPitch:0,
     stats:null, visuals:null, team:null, isHuman:false, dead:false };
 }
 function makeHuman(num){ const e=baseEntity(); e.isHuman=true; e.num=num; e.scheme=null; e.gamepadIndex=-1; e.planeIdx=0;
@@ -520,12 +535,15 @@ function gamepadRank(e){ let r=0; for(const h of humans){ if(h.scheme==='gamepad
 function readInput(e){
   if(e.scheme==='gamepad'){
     const gp = connectedPads()[gamepadRank(e)];   // stateless: Nth gamepad-player -> Nth connected controller
-    if(!gp) return {pitch:0,roll:0,fire:false,boost:false,missile:false};
-    const dz=CFG.deadzone; let lx=gp.axes[0]||0,ly=gp.axes[1]||0; if(Math.abs(lx)<dz)lx=0; if(Math.abs(ly)<dz)ly=0;
+    if(!gp) return {pitch:0,roll:0,fire:false,boost:false,missile:false,lookX:0,lookY:0};
+    const dz=CFG.deadzone;
+    // deadzone-rescaled + mild expo curve -> smooth, precise fine control near center
+    const ax=n=>{ let v=gp.axes[n]||0; const a=Math.abs(v); if(a<dz) return 0; v=(v-Math.sign(v)*dz)/(1-dz); return v*(0.45*v*v+0.55); };
+    const lx=ax(0), ly=ax(1), rx=ax(2), ry=ax(3);   // left stick = fly, right stick = look/camera
     const fire=(gp.buttons[0]&&gp.buttons[0].pressed)||(gp.buttons[7]&&gp.buttons[7].value>0.3);
     const boost=(gp.buttons[6]&&gp.buttons[6].value>0.3)||(gp.buttons[10]&&gp.buttons[10].pressed);
     const missile=gp.buttons[1]&&gp.buttons[1].pressed;
-    return {pitch:-ly,roll:lx,fire:!!fire,boost:!!boost,missile:!!missile}; }
+    return {pitch:-ly,roll:lx,fire:!!fire,boost:!!boost,missile:!!missile,lookX:rx,lookY:-ry}; }
   if(e.scheme==='wasd') return { pitch:(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0), roll:(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0),
     fire:keys.has('Space'), boost:keys.has('ShiftLeft'), missile:keys.has('KeyQ') };
   return { pitch:(keys.has('KeyI')?1:0)-(keys.has('KeyK')?1:0), roll:(keys.has('KeyL')?1:0)-(keys.has('KeyJ')?1:0),
@@ -648,11 +666,11 @@ function endGame(result){
   if(mode==='versus'){ const win=humans[0].score>humans[1].score?1:2;
     w.textContent='PLAYER '+win+' WINS'; w.style.color=TEAMCOL[win].hex;
     fs.textContent=humans[0].score+'  —  '+humans[1].score;
-    xp = 60 + (humans[0].score+humans[1].score)*4;
+    xp = 90 + (humans[0].score+humans[1].score)*6;
   } else {
     w.textContent='MISSION OVER'; w.style.color='#ff7a3c';
     fs.textContent='Reached Wave '+wave+' · '+(humans[0].score+humans[1].score)+' enemies downed';
-    xp = wave*20 + (humans[0].score+humans[1].score)*8;
+    xp = wave*30 + (humans[0].score+humans[1].score)*10;
   }
   awardXp(xp, xg);
   gameoverEl.classList.remove('hidden','flash'); void gameoverEl.offsetWidth; gameoverEl.classList.add('flash');
@@ -681,7 +699,7 @@ function refreshPilotBar(){ const L=levelForXp(profile.xp), cur=xpForLevel(L), n
   document.getElementById('xpFill').style.width=clamp((profile.xp-cur)/(next-cur)*100,0,100)+'%';
   document.getElementById('xpText').textContent=(profile.xp-cur)+' / '+(next-cur)+' XP'; }
 
-const STAT_KEYS=[['speed','SPD',300],['turn','TRN',1.1],['hull','HUL',150],['dmg','GUN',6.5]];
+const STAT_KEYS=[['speed','SPD',240],['turn','TRN',1.2],['hull','HUL',170],['dmg','GUN',7]];
 function renderPlaneSel(idx){
   const e=humans[idx], host=document.getElementById('psel'+(idx+1)), def=PLANES[e.planeIdx], unlocked=planeUnlocked(def);
   let stats=STAT_KEYS.map(([k,lbl,mx])=>`<div class="stat">${lbl}<div class="sb"><i style="width:${clamp(def.stats[k]/mx*100,5,100)}%"></i></div></div>`).join('');
@@ -782,12 +800,14 @@ function aiInput(e, dt){
 
 function updateFlight(e, input, dt){
   const s=e.stats;
+  e.lookX=input.lookX||0; e.lookY=input.lookY||0;
   if(e.alive){
-    // smooth control input (snappier but not jerky)
-    e.ctrl.roll = lerp(e.ctrl.roll, input.roll, Math.min(1,dt*9));
-    e.ctrl.pitch = lerp(e.ctrl.pitch, input.pitch, Math.min(1,dt*9));
+    // smooth control input — frame-rate-independent easing (no jerk, consistent at any FPS)
+    const ks=1-Math.exp(-dt*14);
+    e.ctrl.roll = lerp(e.ctrl.roll, input.roll, ks);
+    e.ctrl.pitch = lerp(e.ctrl.pitch, input.pitch, ks);
     const targetRoll=-e.ctrl.roll*1.2;
-    e.roll += (targetRoll-e.roll)*Math.min(1,dt*5);
+    e.roll += (targetRoll-e.roll)*(1-Math.exp(-dt*8));
     e.pitch += e.ctrl.pitch*s.pitch*dt;
     if(Math.abs(input.pitch)<0.05) e.pitch += (0-e.pitch)*Math.min(1,dt*0.7);
     e.pitch=clamp(e.pitch,-1.3,1.3);
@@ -859,7 +879,7 @@ function killEntity(victim, attacker, selfDestruct){
   if(victim.isHuman) updateBars(victim);
 
   if(attacker && attacker.isHuman && !selfDestruct){ attacker.score++; updateBars(attacker);
-    awardXp(victim.isHuman?12:8, null);
+    awardXp(victim.isHuman?20:12, null);
     if(mode==='versus' && attacker.score>=CFG.killsToWin){ endGame(); return; } }
 
   if(victim.team==='enemy'){ // bot died — remove
@@ -909,13 +929,29 @@ function updatePickups(dt){ pickupTimer-=dt; if(pickupTimer<=0){ spawnPickup(); 
 // =====================================================================
 //  CHASE CAM
 // =====================================================================
-const _cp=new THREE.Vector3(),_lk=new THREE.Vector3(),_wUp=new THREE.Vector3(0,1,0);
+const _cp=new THREE.Vector3(),_lk=new THREE.Vector3(),_wUp=new THREE.Vector3(0,1,0),_back=new THREE.Vector3(),_rax=new THREE.Vector3();
+const CAM_MAX_YAW=2.7, CAM_MAX_PITCH=0.95;   // how far the right stick can swing the view (rad)
 function updateCamera(e, dt){
   _fwd.set(0,0,-1).applyQuaternion(e.quat);
-  _cp.copy(e.pos).addScaledVector(_fwd,-36).addScaledVector(_wUp,13);
+  // ease the free-look angles toward the right-stick target (recenters smoothly when released)
+  const ka=1-Math.exp(-dt*10);
+  e.camYaw   += ((e.lookX||0)*CAM_MAX_YAW   - e.camYaw)*ka;
+  e.camPitch += ((e.lookY||0)*CAM_MAX_PITCH - e.camPitch)*ka;
+  // base chase offset (behind + above), then orbit it by the look angles
+  _back.copy(_fwd).multiplyScalar(-36).addScaledVector(_wUp,13);
+  if(e.camYaw||e.camPitch){
+    _back.applyAxisAngle(_wUp, e.camYaw);
+    _rax.crossVectors(_wUp,_back);
+    if(_rax.lengthSq()>1e-6){ _rax.normalize(); _back.applyAxisAngle(_rax, e.camPitch); }
+  }
+  _cp.copy(e.pos).add(_back);
   const gl=groundLevel(_cp.x,_cp.z)+9; if(_cp.y<gl) _cp.y=gl;
-  if(!e.camInit){ e.cam.position.copy(_cp); e.camInit=true; } else e.cam.position.lerp(_cp, Math.min(1,dt*5));
-  e.cam.up.copy(_wUp); _lk.copy(e.pos).addScaledVector(_fwd,62); e.cam.lookAt(_lk);
+  if(!e.camInit){ e.cam.position.copy(_cp); e.camInit=true; } else e.cam.position.lerp(_cp, 1-Math.exp(-dt*9));
+  e.cam.up.copy(_wUp);
+  // look ahead in normal flight; pull the aim toward the plane while looking around (so it frames the bandit on your six)
+  const lookMag=Math.min(1, Math.abs(e.camYaw)/CAM_MAX_YAW + Math.abs(e.camPitch)/CAM_MAX_PITCH);
+  _lk.copy(e.pos).addScaledVector(_fwd, lerp(62, 2, lookMag));
+  e.cam.lookAt(_lk);
 }
 
 // =====================================================================
@@ -993,7 +1029,7 @@ function updateCoop(dt){
   if(humans.every(h=>h.dead)){ endGame(); return; }
   // wave flow
   if(waveState==='intermission'){ waveTimer-=dt; if(waveTimer<=0) startWave(); }
-  else if(waveState==='active'){ if(bots.length===0){ waveState='intermission'; waveTimer=3.5; awardXp(wave*5,null);
+  else if(waveState==='active'){ if(bots.length===0){ waveState='intermission'; waveTimer=3.5; awardXp(wave*12,null);
       teamLives=Math.min(9,teamLives+1); toast('Wave '+wave+' cleared! +1 life'); } }
 }
 
