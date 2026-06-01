@@ -147,11 +147,12 @@
   /* ADS overlays */
   .scope,.tanksight{ position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .12s; }
   .scope.on,.tanksight.on{ opacity:1; }
-  .scope{ background:radial-gradient(circle at 50% 50%, transparent 40%, rgba(0,0,0,0.55) 47%, rgba(0,0,0,0.88) 100%); }
-  .scope .sring{ position:absolute; left:50%; top:50%; width:80vh; height:80vh; max-width:94%; max-height:94%; transform:translate(-50%,-50%); border:3px solid rgba(15,30,15,0.9); border-radius:50%; box-shadow:0 0 0 2px rgba(90,140,90,0.4) inset; }
-  .scope .sh,.scope .sv{ position:absolute; background:rgba(10,30,10,0.9); }
-  .scope .sh{ left:50%; top:50%; width:42vh; max-width:80%; height:1px; transform:translate(-50%,-50%); }
-  .scope .sv{ left:50%; top:50%; height:42vh; max-height:80%; width:1px; transform:translate(-50%,-50%); }
+  /* infantry ADS = clean crosshair only (no dark tunnel); fades out on release */
+  .scope .sring{ position:absolute; left:50%; top:50%; width:64px; height:64px; transform:translate(-50%,-50%); border:1.5px solid rgba(140,255,180,0.55); border-radius:50%; box-shadow:0 0 6px rgba(80,255,150,0.35); }
+  .scope .sring:after{ content:''; position:absolute; left:50%; top:50%; width:3px; height:3px; border-radius:50%; background:#9bffc0; transform:translate(-50%,-50%); box-shadow:0 0 6px #9bffc0; }
+  .scope .sh,.scope .sv{ position:absolute; background:rgba(150,255,190,0.95); box-shadow:0 0 5px rgba(80,255,150,0.6); }
+  .scope .sh{ left:50%; top:50%; width:26px; height:2px; transform:translate(-50%,-50%); }
+  .scope .sv{ left:50%; top:50%; width:2px; height:26px; transform:translate(-50%,-50%); }
   .tanksight .tring{ position:absolute; left:50%; top:50%; width:220px; height:220px; transform:translate(-50%,-50%); border:1px solid rgba(255,90,50,0.65); border-radius:50%; box-shadow:0 0 12px rgba(255,80,40,0.3) inset; }
   .tanksight .tchev{ position:absolute; left:50%; top:50%; width:0; height:0; transform:translate(-50%,4px); border-left:9px solid transparent; border-right:9px solid transparent; border-top:14px solid rgba(255,90,50,0.9); }
   .tanksight .th{ position:absolute; left:50%; top:50%; width:300px; max-width:70%; height:1px; transform:translate(-50%,-50%); background:rgba(255,90,50,0.55); }
