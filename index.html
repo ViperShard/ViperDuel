@@ -147,8 +147,8 @@
   /* ADS overlays */
   .scope,.tanksight{ position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .12s; }
   .scope.on,.tanksight.on{ opacity:1; }
-  .scope{ background:radial-gradient(circle at 50% 50%, transparent 26%, rgba(0,0,0,0.55) 27%, #000 33%); }
-  .scope .sring{ position:absolute; left:50%; top:50%; width:52vh; height:52vh; max-width:90%; max-height:90%; transform:translate(-50%,-50%); border:2px solid rgba(0,0,0,0.85); border-radius:50%; box-shadow:0 0 0 3px rgba(80,120,80,0.25) inset; }
+  .scope{ background:radial-gradient(circle at 50% 50%, transparent 40%, rgba(0,0,0,0.55) 47%, rgba(0,0,0,0.88) 100%); }
+  .scope .sring{ position:absolute; left:50%; top:50%; width:80vh; height:80vh; max-width:94%; max-height:94%; transform:translate(-50%,-50%); border:3px solid rgba(15,30,15,0.9); border-radius:50%; box-shadow:0 0 0 2px rgba(90,140,90,0.4) inset; }
   .scope .sh,.scope .sv{ position:absolute; background:rgba(10,30,10,0.9); }
   .scope .sh{ left:50%; top:50%; width:42vh; max-width:80%; height:1px; transform:translate(-50%,-50%); }
   .scope .sv{ left:50%; top:50%; height:42vh; max-height:80%; width:1px; transform:translate(-50%,-50%); }
@@ -204,7 +204,7 @@
       <div class="hint" id="p1hint">Choose controls</div>
       <button class="opt" data-player="1" data-scheme="wasd">⌨ WASD<small>W/S pitch · A/D bank · Space guns · Q missile · LShift boost · E aim · C cockpit</small></button>
       <button class="opt" data-player="1" data-scheme="ijkl">⌨ IJKL<small>I/K pitch · J/L bank · Enter guns · U missile · RShift boost · O aim · M cockpit</small></button>
-      <button class="opt" data-player="1" data-scheme="gamepad">🎮 Xbox<small>L-stick · R-stick · RT/A fire · LT aim · RB boost/sprint · B missile/MG · A jump · Y view</small></button>
+      <button class="opt" data-player="1" data-scheme="gamepad">🎮 Xbox<small>L-stick · R-stick · RT/A fire · LT aim · RB boost/sprint · B missile/MG · X bomb · A jump · Y view</small></button>
       <div class="classsel" id="csel1"></div>
       <div class="planesel" id="psel1"></div>
     </div>
@@ -213,7 +213,7 @@
       <div class="hint" id="p2hint">Choose controls</div>
       <button class="opt" data-player="2" data-scheme="wasd">⌨ WASD<small>W/S pitch · A/D bank · Space guns · Q missile · LShift boost · E aim · C cockpit</small></button>
       <button class="opt" data-player="2" data-scheme="ijkl">⌨ IJKL<small>I/K pitch · J/L bank · Enter guns · U missile · RShift boost · O aim · M cockpit</small></button>
-      <button class="opt" data-player="2" data-scheme="gamepad">🎮 Xbox<small>L-stick · R-stick · RT/A fire · LT aim · RB boost/sprint · B missile/MG · A jump · Y view</small></button>
+      <button class="opt" data-player="2" data-scheme="gamepad">🎮 Xbox<small>L-stick · R-stick · RT/A fire · LT aim · RB boost/sprint · B missile/MG · X bomb · A jump · Y view</small></button>
       <div class="classsel" id="csel2"></div>
       <div class="planesel" id="psel2"></div>
     </div>
@@ -249,7 +249,7 @@ const clamp=THREE.MathUtils.clamp, lerp=THREE.MathUtils.lerp;
 // =====================================================================
 const CFG = {
   terrainSize:16000, terrainSegs:200, seaLevel:0,
-  playRadius:4400, ceiling:2000,
+  playRadius:4400, groundRadius:1500, ceiling:2000,
   minSpeed:105, maxSpeed:300,
   bulletSpeed:920, bulletLife:1.2,
   planeRadius:7, groundClearance:9, pullUpAGL:95,
@@ -295,11 +295,13 @@ const PLANES = [
 ];
 // ---- ground classes (combined arms) ----
 const TANK={ hull:360, speed:38, rev:20, turn:1.15, turretYaw:1.7, turretPitch:0.9, pMin:-0.08, pMax:0.4,
-  mainReload:3.0, shellDmg:130, shellSplash:42, shellSpeed:380, mgDmg:6, mgCd:0.085, height:2.6, missiles:0 };
+  mainReload:3.4, shellDmg:140, shellSplash:40, shellSpeed:850, mgDmg:6, mgCd:0.085, height:2.6, missiles:0 };
 const INF={ hull:90, walk:17, run:32, jump:12, lookYaw:2.5, lookPitch:1.35, eye:3.2, stand:3.2,
   rifleDmg:14, rifleCd:0.09, rifleSpeed:1400, mag:30, reloadT:1.8, missiles:0 };
+const NAVY={ hull:1100, speed:32, rev:15, turn:0.5, turretYaw:1.1, turretPitch:0.5, pMin:-0.05, pMax:0.5,
+  mainReload:2.6, shellDmg:170, shellSplash:48, shellSpeed:620, torpReload:5, torpDmg:300, torpSpeed:95, height:0, missiles:0 };
 const GRAV=34;
-const CLASSES=[ {id:'air',label:'✈ Air'}, {id:'tank',label:'🛡 Tank'}, {id:'infantry',label:'🪖 Infantry'} ];
+const CLASSES=[ {id:'air',label:'✈ Air'}, {id:'tank',label:'🛡 Tank'}, {id:'infantry',label:'🪖 Infantry'}, {id:'navy',label:'🚢 Navy'} ];
 
 function xpForLevel(L){ return 50*L*(L-1); }            // L1=0,L2=100,L3=300,L4=600,L5=1000,L6=1500,L7=2100
 function levelForXp(xp){ let L=1; while(xpForLevel(L+1)<=xp) L++; return L; }
@@ -713,12 +715,13 @@ function readInput(e){
     const boost=(gp.buttons[5]&&gp.buttons[5].pressed)||(gp.buttons[10]&&gp.buttons[10].pressed); // RB / L3 = boost / sprint
     const missile=gp.buttons[1]&&gp.buttons[1].pressed;            // B = missile / tank MG
     const jump=gp.buttons[0]&&gp.buttons[0].pressed;               // A = jump (infantry)
+    const bomb=gp.buttons[2]&&gp.buttons[2].pressed;               // X = drop bombs (air)
     const view=gp.buttons[3]&&gp.buttons[3].pressed;               // Y = toggle cockpit / chase
-    return {pitch:-ly,roll:lx,fire:!!fire,fireRT:!!fireRT,jump:!!jump,boost:!!boost,missile:!!missile,lookX:rx,lookY:-ry,aim,view:!!view}; }
+    return {pitch:-ly,roll:lx,fire:!!fire,fireRT:!!fireRT,jump:!!jump,bomb:!!bomb,boost:!!boost,missile:!!missile,lookX:rx,lookY:-ry,aim,view:!!view}; }
   if(e.scheme==='wasd') return { pitch:(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0), roll:(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0),
-    fire:keys.has('Space'), fireRT:keys.has('Space'), jump:keys.has('KeyQ'), boost:keys.has('ShiftLeft'), missile:keys.has('KeyQ'), aim:keys.has('KeyE')?1:0, view:keys.has('KeyC') };
+    fire:keys.has('Space'), fireRT:keys.has('Space'), jump:keys.has('KeyQ'), bomb:keys.has('KeyF'), boost:keys.has('ShiftLeft'), missile:keys.has('KeyQ'), aim:keys.has('KeyE')?1:0, view:keys.has('KeyC') };
   return { pitch:(keys.has('KeyI')?1:0)-(keys.has('KeyK')?1:0), roll:(keys.has('KeyL')?1:0)-(keys.has('KeyJ')?1:0),
-    fire:keys.has('Enter'), fireRT:keys.has('Enter'), jump:keys.has('KeyU'), boost:keys.has('ShiftRight'), missile:keys.has('KeyU'), aim:keys.has('KeyO')?1:0, view:keys.has('KeyM') };
+    fire:keys.has('Enter'), fireRT:keys.has('Enter'), jump:keys.has('KeyU'), bomb:keys.has('KeyH'), boost:keys.has('ShiftRight'), missile:keys.has('KeyU'), aim:keys.has('KeyO')?1:0, view:keys.has('KeyM') };
 }
 
 // =====================================================================
@@ -844,15 +847,17 @@ function placeHuman(e, pos, heading){
   e.aim=0; e.aimRaw=0; e.camYaw=0; e.camPitch=0; e.stamina=1; e.reloading=0;
   if(e.kind==='air'){ e.speed=e.stats.speed; e.boostFuel=1; e.ammo=e.stats.missiles; e.reload=CFG.missileReload; e.overcharge=0; }
   else if(e.kind==='tank'){ e.speed=0; e.ammo=20; e.pos.y=groundLevel(pos.x,pos.z); }
+  else if(e.kind==='navy'){ e.speed=0; e.pos.y=CFG.seaLevel; }
   else { e.speed=0; e.mag=INF.mag; e.pos.y=groundLevel(pos.x,pos.z)+INF.stand; }
 }
 function spawnHuman(e, idx){ const side=idx===0?-1:1; let pos;
   if(e.kind==='air'){ pos=new THREE.Vector3(side*CFG.playRadius*0.4,0,0); pos.y=groundLevel(pos.x,pos.z)+460;
     if(mode==='coop'){ pos.set(idx===0?-160:160,0,CFG.playRadius*0.3); pos.y=groundLevel(pos.x,pos.z)+460; } }
-  else { pos=new THREE.Vector3(side*CFG.playRadius*0.22, 0, mode==='coop'?CFG.playRadius*0.18:0); }
+  else if(e.kind==='navy'){ pos=findWater(); }
+  else { pos=new THREE.Vector3(side*CFG.groundRadius*0.5, 0, mode==='coop'?CFG.groundRadius*0.4:0); }
   placeHuman(e,pos,headingToCenter(pos));
 }
-function respawnHuman(e){ const a=Math.random()*Math.PI*2,d=CFG.playRadius*(0.3+Math.random()*0.4);
+function respawnHuman(e){ const a=Math.random()*Math.PI*2,d=(e.kind==='air'?CFG.playRadius:CFG.groundRadius)*(0.3+Math.random()*0.4);
   const pos=new THREE.Vector3(Math.cos(a)*d,0,Math.sin(a)*d);
   if(e.kind==='air') pos.y=groundLevel(pos.x,pos.z)+460+Math.random()*180;
   placeHuman(e,pos,headingToCenter(pos)); }
@@ -868,7 +873,7 @@ function spawnBot(w){
   else { const base=PLANES.find(p=>p.id===ENEMY_PLANES[Math.min(ENEMY_PLANES.length-1,Math.floor(Math.random()*Math.min(ENEMY_PLANES.length,1+Math.floor(w/2))))]);
     const def={...base, livery:0x7a2a2a, stats:{...base.stats, hull:Math.round(base.stats.hull*(0.8+w*0.1)), dmg:base.stats.dmg*0.6}}; e.def=def; e.stats=def.stats; e.visuals=buildPlaneModel(def,glow); }
   scene.add(e.visuals.group);
-  const a=Math.random()*Math.PI*2, d=CFG.playRadius*(0.6+Math.random()*0.35);
+  const a=Math.random()*Math.PI*2, d=(e.kind==='air'?CFG.playRadius:CFG.groundRadius)*(0.55+Math.random()*0.4);
   const pos=new THREE.Vector3(Math.cos(a)*d,0,Math.sin(a)*d);
   pos.y = e.kind==='air' ? groundLevel(pos.x,pos.z)+420+Math.random()*280 : groundLevel(pos.x,pos.z)+(e.kind==='tank'?0:INF.stand);
   const heading=headingToCenter(pos);
@@ -895,7 +900,7 @@ function aiInputGround(e,dt){
   return inp;
 }
 function aiFor(e,dt){ return e.kind==='air' ? aiInput(e,dt) : aiInputGround(e,dt); }
-function startWave(){ wave++; const count=Math.min(2+wave,7); for(let i=0;i<count;i++) spawnBot(wave);
+function startWave(){ wave++; const count=Math.min(3+wave*2,12); for(let i=0;i<count;i++) spawnBot(wave);
   announce('WAVE '+wave); waveState='active'; }
 
 function clearWorld(){ for(const b of bullets) scene.remove(b.mesh); bullets.length=0;
@@ -903,6 +908,9 @@ function clearWorld(){ for(const b of bullets) scene.remove(b.mesh); bullets.len
   for(const pr of particles) scene.remove(pr.mesh); particles.length=0;
   for(const pk of pickups) scene.remove(pk.group); pickups.length=0;
   for(const p of pilots){ scene.remove(p.group); p.group.traverse(o=>{ if(o.geometry)o.geometry.dispose(); if(o.material)o.material.dispose(); }); } pilots.length=0;
+  for(const b of bombs) scene.remove(b.mesh); bombs.length=0;
+  for(const t of torps) scene.remove(t.mesh); torps.length=0;
+  for(const s of structures) scene.remove(s.group); structures.length=0;
   for(const b of bots) scene.remove(b.visuals.group); bots=[]; }
 
 function startGame(){
@@ -914,11 +922,13 @@ function startGame(){
     if(e.visuals){ scene.remove(e.visuals.group); }
     if(e.kind==='tank'){ e.visuals=buildTank(glow); e.def={livery:0x4a5238}; e.stats=TANK; e.tracer=glow; scene.add(e.visuals.group); }
     else if(e.kind==='infantry'){ e.visuals=buildSoldier(glow); e.def={livery:0x3a4a32}; e.stats=INF; e.tracer=glow; scene.add(e.visuals.group); }
+    else if(e.kind==='navy'){ e.visuals=buildShip(glow); e.def={livery:0x47505a}; e.stats=NAVY; e.tracer=glow; scene.add(e.visuals.group); }
     else { buildVisualsFor(e, PLANES[e.planeIdx], glow); }
     e.visuals.group.traverse(o=>o.layers.set(e.num));   // own model on its own render layer (cockpit/FPS hide)
     spawnHuman(e,i); updateBars(e); });
   // both eyes see the world (layer 0) + both planes (layers 1 & 2); cockpit view disables the pilot's own layer
   humans.forEach((h,i)=>{ h.cam.layers.enable(1); h.cam.layers.enable(2); h.cam.layers.enable(3+i); });
+  spawnStructures();
   if(mode==='coop'){ teamLives=5; wave=0; waveState='intermission'; waveTimer=2.5; }
   setup.classList.add('hidden'); gameoverEl.classList.add('hidden'); showEyes(true);
   gameState='playing'; sfx.init(); sfx.startMusic();
@@ -1108,6 +1118,7 @@ function updateFlight(e, input, dt){
     if(input.fire && e.cooldown<=0){ fireGuns(e); e.cooldown=fireCd; }
     if(input.missile && !e._missileHeld && e.ammo>0){ fireMissile(e); }
     e._missileHeld=input.missile;
+    e.bombCd=(e.bombCd||0)-dt; if(input.bomb && e.bombCd<=0){ fireBomb(e); e.bombCd=1.3; }   // air-to-ground
     if(e.ammo<s.missiles){ e.reload-=dt; if(e.reload<=0){ e.ammo++; e.reload=CFG.missileReload; } }
 
     // timers
@@ -1180,6 +1191,7 @@ function updateBullets(dt){
     if(!dead && cur.y<groundLevel(cur.x,cur.z)){ burst(cur,0xcaa56a,5,18,0.5); dead=true; }
     if(!dead){ for(const c of actors()){ if(c.team===b.team||!c.alive||c.invuln>0) continue;
       if(distPointSeg(c.pos,prev,cur)<CFG.planeRadius+6){ damageEntity(c,b.owner,c.pos.clone(),b.dmg); dead=true; break; } } }
+    if(!dead && hitStructures(prev,cur,b.team,b.dmg,b.owner)) dead=true;
     if(dead){ scene.remove(b.mesh); b.mesh.material.dispose(); bullets.splice(i,1); } }
 }
 function updateMissiles(dt){
@@ -1216,6 +1228,7 @@ function aimVec(yaw,pitch){ return new THREE.Vector3(-Math.sin(yaw)*Math.cos(pit
 function updateActor(e,input,dt){
   if(e.kind==='tank') updateTank(e,input,dt);
   else if(e.kind==='infantry') updateInfantry(e,input,dt);
+  else if(e.kind==='navy') updateNavy(e,input,dt);
   else updateFlight(e,input,dt);
 }
 function updateTank(e,input,dt){
@@ -1227,7 +1240,7 @@ function updateTank(e,input,dt){
     e.heading += -steer*s.turn*dt;
     const fwd=new THREE.Vector3(-Math.sin(e.heading),0,-Math.cos(e.heading));
     e.pos.addScaledVector(fwd,e.speed*dt); e.pos.y=groundLevel(e.pos.x,e.pos.z);
-    const hd=Math.hypot(e.pos.x,e.pos.z); if(hd>CFG.playRadius){ const k=CFG.playRadius/hd; e.pos.x*=k; e.pos.z*=k; }
+    const hd=Math.hypot(e.pos.x,e.pos.z); if(hd>CFG.groundRadius){ const k=CFG.groundRadius/hd; e.pos.x*=k; e.pos.z*=k; }
     if(isPad){ e.turretYaw -= (input.lookX||0)*s.turretYaw*dt; e.turretPitch += (input.lookY||0)*s.turretPitch*dt; }
     else e.turretYaw = lerp(e.turretYaw, e.heading, 1-Math.exp(-dt*4));   // keyboard: turret tracks hull
     e.turretPitch=clamp(e.turretPitch, s.pMin, s.pMax);
@@ -1243,9 +1256,9 @@ function updateTank(e,input,dt){
 function fireShell(e){
   const dir=aimVec(e.turretYaw,e.turretPitch);
   const o=e.pos.clone().add(new THREE.Vector3(0,2.8,0)).addScaledVector(dir,9);
-  const m=new THREE.Mesh(shellGeo,new THREE.MeshStandardMaterial({color:0xffcc66,emissive:0x552200,emissiveIntensity:0.6}));
-  m.position.copy(o); scene.add(m);
-  shells.push({mesh:m,vel:dir.clone().multiplyScalar(e.stats.shellSpeed),life:6,team:e.team,owner:e});
+  const m=new THREE.Mesh(shellGeo,new THREE.MeshStandardMaterial({color:0xffcc66,emissive:0xff7a22,emissiveIntensity:0.8}));
+  m.position.copy(o); m.add(makeGlow(0xffaa55,4)); scene.add(m);
+  shells.push({mesh:m,vel:dir.clone().multiplyScalar(e.stats.shellSpeed),life:5,team:e.team,owner:e});
   burst(o,0xffd27a,10,46,1.1); sfx.cannon();
 }
 function fireTankMG(e){
@@ -1257,15 +1270,17 @@ function fireTankMG(e){
   sfx.mg();
 }
 function updateShells(dt){
-  for(let i=shells.length-1;i>=0;i--){ const sh=shells[i]; sh.life-=dt; sh.vel.y-=GRAV*1.3*dt;
+  for(let i=shells.length-1;i>=0;i--){ const sh=shells[i]; sh.life-=dt; sh.vel.y-=GRAV*0.4*dt;
     const prev=sh.mesh.position.clone(); sh.mesh.position.addScaledVector(sh.vel,dt); const cur=sh.mesh.position;
     if(Math.random()<0.4) smokePuff(cur);
     let boom=sh.life<=0 || cur.y<groundLevel(cur.x,cur.z);
     if(!boom){ for(const c of actors()){ if(c===sh.owner||!c.alive||c.team===sh.team) continue; if(distPointSeg(c.pos,prev,cur)<9){ boom=true; break; } } }
+    if(!boom){ for(const s of structures){ if(!s.dead&&s.team!==sh.team&&distPointSeg(s.pos,prev,cur)<s.r){ boom=true; break; } } }
     if(boom){ const ep=cur.clone(); const g=groundLevel(ep.x,ep.z); if(ep.y<g) ep.y=g;
       burst(ep,0xffaa33,40,80,2.0,true); burst(ep,0x554433,18,42,1.2,true); sfx.explosion();
       const sp=sh.owner.stats.shellSplash, dmg=sh.owner.stats.shellDmg;
       for(const c of actors()){ if(!c.alive||c.invuln>0||c.team===sh.team) continue; const d=c.pos.distanceTo(ep); if(d<sp) damageEntity(c,sh.owner,c.pos.clone(),dmg*(1-d/sp*0.6)); }
+      for(const s of structures){ if(s.dead||s.team===sh.team) continue; const d=s.pos.distanceTo(ep); if(d<sp+s.r) damageStructure(s,dmg*0.8,sh.owner); }
       scene.remove(sh.mesh); shells.splice(i,1); } }
 }
 function updateInfantry(e,input,dt){
@@ -1286,7 +1301,7 @@ function updateInfantry(e,input,dt){
     const gy=groundLevel(e.pos.x,e.pos.z)+s.stand;
     if(e.pos.y<=gy){ e.pos.y=gy; e.vy=0; e.onGround=true; } else e.onGround=false;
     if(input.jump && e.onGround){ e.vy=s.jump; e.onGround=false; sfx.jump(); }
-    const hd=Math.hypot(e.pos.x,e.pos.z); if(hd>CFG.playRadius){ const k=CFG.playRadius/hd; e.pos.x*=k; e.pos.z*=k; }
+    const hd=Math.hypot(e.pos.x,e.pos.z); if(hd>CFG.groundRadius){ const k=CFG.groundRadius/hd; e.pos.x*=k; e.pos.z*=k; }
     const fireBtn = isPad ? input.fireRT : input.fire;
     e.mgCd-=dt; if(e.reloading>0){ e.reloading-=dt; if(e.reloading<=0) e.mag=INF.mag; }
     if(fireBtn && e.mgCd<=0 && e.mag>0 && e.reloading<=0){ fireRifle(e); e.mag--; e.mgCd=s.rifleCd; if(e.mag<=0) e.reloading=INF.reloadT; }
@@ -1303,6 +1318,118 @@ function fireRifle(e){
   scene.add(mesh); bullets.push({mesh,vel:dir.clone().multiplyScalar(INF.rifleSpeed),life:1.0,team:e.team,owner:e,dmg:e.stats.rifleDmg});
   sfx.rifle();
 }
+
+// =====================================================================
+//  BOMBS (air-to-ground)
+// =====================================================================
+const bombs=[]; const bombGeo=new THREE.CapsuleGeometry(0.6,2.6,4,8); bombGeo.rotateX(Math.PI/2);
+function fireBomb(e){ const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(e.quat);
+  const m=new THREE.Mesh(bombGeo,new THREE.MeshStandardMaterial({color:0x2b2b2b,metalness:0.4,roughness:0.6}));
+  m.position.copy(e.pos).addScaledVector(fwd,5); scene.add(m);
+  bombs.push({mesh:m,vel:fwd.clone().multiplyScalar(e.speed*0.6).add(new THREE.Vector3(0,-3,0)),life:9,team:e.team,owner:e}); sfx.missile(); }
+function updateBombs(dt){ for(let i=bombs.length-1;i>=0;i--){ const b=bombs[i]; b.life-=dt; b.vel.y-=GRAV*dt; b.mesh.position.addScaledVector(b.vel,dt); b.mesh.rotation.x+=dt*1.5; const cur=b.mesh.position;
+  if(Math.random()<0.25) smokePuff(cur);
+  let boom=b.life<=0 || cur.y<Math.max(groundLevel(cur.x,cur.z),CFG.seaLevel);
+  if(!boom){ for(const c of actors()){ if(c===b.owner||!c.alive||c.team===b.team) continue; if(c.pos.distanceTo(cur)<16){boom=true;break;} } }
+  if(!boom){ for(const s of structures){ if(!s.dead&&s.team!==b.team&&s.pos.distanceTo(cur)<s.r+6){boom=true;break;} } }
+  if(boom){ const ep=cur.clone(); const g=Math.max(groundLevel(ep.x,ep.z),CFG.seaLevel); if(ep.y<g)ep.y=g; const SP=78,DMG=175;
+    burst(ep,0xffbb44,70,120,3.0,true); burst(ep,0x553322,34,64,1.9,true); sfx.explosion();
+    for(const c of actors()){ if(!c.alive||c.invuln>0||c.team===b.team) continue; const d=c.pos.distanceTo(ep); if(d<SP) damageEntity(c,b.owner,c.pos.clone(),DMG*(1-d/SP*0.6)); }
+    for(const s of structures){ if(s.dead||s.team===b.team) continue; const d=s.pos.distanceTo(ep); if(d<SP+s.r) damageStructure(s,DMG*0.9,b.owner); }
+    scene.remove(b.mesh); bombs.splice(i,1); } } }
+
+// =====================================================================
+//  STRUCTURES — anti-air emplacements + HQ (mass warfare)
+// =====================================================================
+const structures=[];
+function buildAA(team){ const g=new THREE.Group(); const col=TEAMCOL[team]||TEAMCOL.enemy;
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(3,3.6,2,10),new THREE.MeshStandardMaterial({color:0x3a3f33,metalness:0.4,roughness:0.7})); base.position.y=1; g.add(base);
+  const turret=new THREE.Group(); turret.position.y=2.2; g.add(turret);
+  turret.add(new THREE.Mesh(new THREE.BoxGeometry(2,1,2),new THREE.MeshStandardMaterial({color:0x4a4f42,metalness:0.4,roughness:0.6})));
+  for(const sx of [-0.5,0.5]){ const bar=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,5,8),new THREE.MeshStandardMaterial({color:0x222229,metalness:0.5,roughness:0.5})); bar.rotation.x=-1.0; bar.position.set(sx,0.6,-1.4); turret.add(bar); }
+  const beacon=makeGlow(col.glow,5); beacon.position.y=3; g.add(beacon);
+  return { group:g, turret }; }
+function buildHQ(team){ const g=new THREE.Group(); const col=TEAMCOL[team]||TEAMCOL.enemy;
+  const mat=new THREE.MeshStandardMaterial({color:0x555a48,metalness:0.4,roughness:0.7});
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(26,10,26),mat),{position:new THREE.Vector3(0,5,0)}));
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(8,18,8),mat),{position:new THREE.Vector3(0,14,0)}));
+  const beacon=makeGlow(col.glow,16); beacon.position.y=30; g.add(beacon);
+  for(const sx of [-1,1]) for(const sz of [-1,1]){ const fl=new THREE.Mesh(new THREE.BoxGeometry(1,5,1),new THREE.MeshStandardMaterial({color:col.glow,emissive:col.glow,emissiveIntensity:0.6})); fl.position.set(sx*13,8,sz*13); g.add(fl); }
+  return { group:g }; }
+function spawnStructures(){
+  const team = mode==='coop' ? 'enemy' : 'neutral';
+  let hx=0,hz=0,ok=false; for(let t=0;t<50&&!ok;t++){ const a=Math.random()*6.28,d=CFG.groundRadius*0.7+Math.random()*700; hx=Math.cos(a)*d; hz=Math.sin(a)*d; const y=terrainHeight(hx,hz); if(y>6&&y<260) ok=true; }
+  const hq=buildHQ(team); hq.group.position.set(hx,groundLevel(hx,hz),hz); scene.add(hq.group);
+  structures.push({group:hq.group,pos:new THREE.Vector3(hx,groundLevel(hx,hz)+8,hz),r:20,hp:2600,maxHp:2600,team,type:'hq',cd:0,tracer:0xff8866});
+  const N=mode==='coop'?10:6;
+  for(let i=0;i<N;i++){ const a=Math.random()*6.28,d=300+Math.random()*(CFG.playRadius*0.7-300); const x=Math.cos(a)*d,z=Math.sin(a)*d; if(terrainHeight(x,z)<4) continue;
+    const aa=buildAA(team); aa.group.position.set(x,groundLevel(x,z),z); scene.add(aa.group);
+    structures.push({group:aa.group,turret:aa.turret,pos:new THREE.Vector3(x,groundLevel(x,z)+3,z),r:6,hp:120,maxHp:120,team,type:'aa',cd:Math.random(),tracer:0xff6644}); }
+}
+function damageStructure(s,amount,attacker){ if(s.dead) return; s.hp-=amount; burst(s.pos.clone().setY(s.pos.y+4),0xffaa55,6,26,0.7);
+  if(s.hp<=0){ s.dead=true; const ep=s.pos.clone(); burst(ep,0xffaa33,70,100,s.type==='hq'?3.4:2.0,true); burst(ep,0x554433,34,56,1.7,true); sfx.explosion(); scene.remove(s.group);
+    if(attacker&&attacker.isHuman){ attacker.score+=(s.type==='hq'?5:2); updateBars(attacker); awardXp(s.type==='hq'?70:15,null); }
+    if(s.type==='hq') announce('HQ DESTROYED'); } }
+function hitStructures(prev,cur,team,dmg,attacker){ for(const s of structures){ if(s.dead||s.team===team) continue; if(distPointSeg(s.pos,prev,cur)<s.r){ damageStructure(s,dmg,attacker); return true; } } return false; }
+function fireFlak(s,tgt){ const o=s.pos.clone().setY(s.pos.y+4); const dir=tgt.pos.clone().sub(o).normalize();
+  const mesh=new THREE.Mesh(bulletGeo,new THREE.MeshBasicMaterial({color:0xff6644,fog:false})); mesh.position.copy(o); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),dir); mesh.scale.setScalar(1.5);
+  scene.add(mesh); bullets.push({mesh,vel:dir.clone().multiplyScalar(640),life:2.2,team:s.team,owner:s,dmg:10}); sfx.mg(); }
+function updateStructures(dt){ for(const s of structures){ if(s.dead||s.type!=='aa') continue; s.cd-=dt;
+  let tgt=null,bd=1e9; for(const c of actors()){ if(!c.alive||c.team===s.team||c.kind!=='air') continue; if(c.pos.y-groundLevel(c.pos.x,c.pos.z)<30) continue; const d=c.pos.distanceTo(s.pos); if(d<1000&&d<bd){bd=d;tgt=c;} }
+  if(tgt){ if(s.turret){ const dir=tgt.pos.clone().sub(s.pos); s.turret.rotation.y=Math.atan2(-dir.x,-dir.z); } if(s.cd<=0){ fireFlak(s,tgt); s.cd=0.45; } } } }
+
+// =====================================================================
+//  NAVY — warships (sail the sea, naval guns + torpedoes)
+// =====================================================================
+const torps=[];
+function buildShip(teamGlow){ const g=new THREE.Group();
+  const hullMat=new THREE.MeshStandardMaterial({color:0x47505a,metalness:0.5,roughness:0.6});
+  const deckMat=new THREE.MeshStandardMaterial({color:0x5a4f3a,metalness:0.2,roughness:0.85});
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(8,4,34),hullMat); hull.position.y=1; g.add(hull);
+  const bow=new THREE.Mesh(new THREE.ConeGeometry(4,9,4),hullMat); bow.rotation.x=-Math.PI/2; bow.rotation.z=Math.PI/4; bow.scale.set(1,0.5,1); bow.position.set(0,1,-20); g.add(bow);
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(7,1,30),deckMat); deck.position.y=3; g.add(deck);
+  const ss=new THREE.Mesh(new THREE.BoxGeometry(5,6,8),hullMat); ss.position.set(0,6,3); g.add(ss);
+  const funnel=new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.4,4,10),hullMat); funnel.position.set(0,9,5); g.add(funnel);
+  const turret=new THREE.Group(); turret.position.set(0,4,-9); g.add(turret);
+  turret.add(new THREE.Mesh(new THREE.BoxGeometry(4,2,4),hullMat));
+  const barrel=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.45,9,10),hullMat); barrel.rotation.x=Math.PI/2; barrel.position.set(0,0.4,-6); turret.add(barrel);
+  const aft=new THREE.Mesh(new THREE.BoxGeometry(4,2,4),hullMat); aft.position.set(0,4,12); g.add(aft);
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(8.2,1,3),new THREE.MeshStandardMaterial({color:teamGlow,emissive:teamGlow,emissiveIntensity:0.5})); stripe.position.set(0,3.6,16); g.add(stripe);
+  g.scale.setScalar(1.6); return { group:g, turret, barrel }; }
+function updateNavy(e,input,dt){ const s=e.stats, isPad=e.scheme==='gamepad';
+  e.aimRaw=input.aim||0; e.aim+=((e.aimRaw)-e.aim)*(1-Math.exp(-dt*10));
+  if(e.alive){ const fwdIn=input.pitch||0, steer=input.roll||0;
+    e.speed += ((fwdIn>0?fwdIn*s.speed:fwdIn*s.rev)-e.speed)*Math.min(1,dt*0.7);
+    e.heading += -steer*s.turn*dt*(0.4+0.6*Math.min(1,Math.abs(e.speed)/8));
+    const fwd=new THREE.Vector3(-Math.sin(e.heading),0,-Math.cos(e.heading));
+    const nx=e.pos.x+fwd.x*e.speed*dt, nz=e.pos.z+fwd.z*e.speed*dt;
+    if(terrainHeight(nx,nz)<-3){ e.pos.x=nx; e.pos.z=nz; } else e.speed*=0.4;   // beached: can't sail onto land
+    const hd=Math.hypot(e.pos.x,e.pos.z); if(hd>CFG.playRadius){ const k=CFG.playRadius/hd; e.pos.x*=k; e.pos.z*=k; }
+    if(isPad){ e.turretYaw -= (input.lookX||0)*s.turretYaw*dt; e.turretPitch += (input.lookY||0)*s.turretPitch*dt; } else e.turretYaw=lerp(e.turretYaw,e.heading,1-Math.exp(-dt*2));
+    e.turretPitch=clamp(e.turretPitch,s.pMin,s.pMax);
+    e.mainCd-=dt; e.mgCd-=dt;
+    if(input.fire && e.mainCd<=0){ fireShell(e); e.mainCd=s.mainReload; }
+    if(input.missile && e.mgCd<=0){ fireTorpedo(e); e.mgCd=s.torpReload; }
+    if(e.invuln>0){ e.invuln-=dt; e.visuals.group.visible=(Math.floor(e.invuln*12)%2===0); if(e.invuln<=0)e.visuals.group.visible=true; }
+  } else e.respawnTimer-=dt;
+  const bob=Math.sin(clock.elapsedTime*1.1+e.pos.x*0.01)*0.5;
+  e.visuals.group.position.set(e.pos.x, CFG.seaLevel+bob, e.pos.z);
+  e.visuals.group.rotation.set(Math.sin(clock.elapsedTime*0.8)*0.02, e.heading, Math.sin(clock.elapsedTime*0.6)*0.025);
+  if(e.visuals.turret){ e.visuals.turret.rotation.y=e.turretYaw-e.heading; e.visuals.barrel.rotation.x=Math.PI/2 - e.turretPitch; }
+  e.quat.setFromEuler(_ge.set(e.turretPitch,e.turretYaw,0,'YXZ')); }
+function fireTorpedo(e){ const dir=new THREE.Vector3(-Math.sin(e.heading),0,-Math.cos(e.heading));
+  const o=e.pos.clone().addScaledVector(dir,24); o.y=CFG.seaLevel+0.5;
+  const geo=new THREE.CapsuleGeometry(0.6,4,4,8); geo.rotateX(Math.PI/2);
+  const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x223040,metalness:0.4,roughness:0.5})); m.position.copy(o); m.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),dir); scene.add(m);
+  torps.push({mesh:m,vel:dir.clone().multiplyScalar(e.stats.torpSpeed),life:9,team:e.team,owner:e}); sfx.missile(); }
+function updateTorps(dt){ for(let i=torps.length-1;i>=0;i--){ const t=torps[i]; t.life-=dt; t.mesh.position.addScaledVector(t.vel,dt); t.mesh.position.y=CFG.seaLevel+0.4; const cur=t.mesh.position;
+  if(Math.random()<0.5){ const w=new THREE.Mesh(sparkGeo,new THREE.MeshBasicMaterial({color:0xcfe8ff,transparent:true,opacity:0.5,depthWrite:false})); w.position.copy(cur); scene.add(w); particles.push({mesh:w,vel:new THREE.Vector3(0,1.5,0),grav:false,life:0.7,max:0.7,mat:w.material}); }
+  let boom=t.life<=0 || terrainHeight(cur.x,cur.z)>-1.5;
+  if(!boom){ for(const c of actors()){ if(c===t.owner||!c.alive||c.team===t.team) continue; if(c.pos.distanceTo(cur)<12){boom=true;break;} } }
+  if(boom){ const ep=cur.clone(); burst(ep,0xbfe0ff,46,70,2.2); burst(ep,0xffaa33,30,70,1.8,true); sfx.explosion();
+    for(const c of actors()){ if(!c.alive||c.invuln>0||c.team===t.team) continue; const d=c.pos.distanceTo(ep); if(d<42) damageEntity(c,t.owner,c.pos.clone(),t.owner.stats.torpDmg*(1-d/42*0.5)); }
+    scene.remove(t.mesh); torps.splice(i,1); } } }
+function findWater(){ for(let t=0;t<80;t++){ const a=Math.random()*6.28,d=CFG.groundRadius+Math.random()*(CFG.playRadius*0.85-CFG.groundRadius); const x=Math.cos(a)*d,z=Math.sin(a)*d; if(terrainHeight(x,z)<-25) return new THREE.Vector3(x,CFG.seaLevel,z); } return new THREE.Vector3(CFG.playRadius*0.6,CFG.seaLevel,0); }
 
 // =====================================================================
 //  CHASE / GROUND CAMERAS
@@ -1325,6 +1452,7 @@ function updateInfCam(e,dt){
   e.cam.quaternion.setFromEuler(_he2.set(e.turretPitch,e.heading,0,'YXZ'));
   e.cam.up.set(0,1,0);
   e.cam.fov=lerp(74,34,e.aim);
+  // (navy cam defined below)
   // view-model: hip -> aim-down-sights, with idle bob
   if(e.vm){ const vm=e.vm.group; vm.visible=e.alive;
     const ads=e.aim, bob=Math.sin(clock.elapsedTime*9)*0.012*(1-ads)*(Math.abs(e.speed)>2?1:0.25);
@@ -1332,10 +1460,20 @@ function updateInfCam(e,dt){
     vm.translateX(lerp(0.34,0.0,ads)); vm.translateY(lerp(-0.30,-0.11,ads)+bob); vm.translateZ(lerp(-0.5,-0.46,ads));
   }
 }
+function updateNavyCam(e,dt){
+  e.cam.layers.enable(e.num); e.hud&&e.hud.root.classList.remove('cockpit'); e.cam.near=1; if(e.vm) e.vm.group.visible=false;
+  const aim=aimVec(e.turretYaw,e.turretPitch); _flat.set(aim.x,0,aim.z); if(_flat.lengthSq()<1e-4) _flat.set(0,0,-1); _flat.normalize();
+  const dist=lerp(48,30,e.aim), high=lerp(24,13,e.aim);
+  _cp.copy(e.pos).addScaledVector(_flat,-dist).addScaledVector(_wUp,high);
+  if(!e.camInit){ e.cam.position.copy(_cp); e.camInit=true; } else e.cam.position.lerp(_cp,1-Math.exp(-dt*6));
+  e.cam.up.copy(_wUp); _lk.copy(e.pos).addScaledVector(_wUp,6).addScaledVector(aim,90); e.cam.lookAt(_lk);
+  e.cam.fov=lerp(60,28,e.aim);
+}
 const CAM_MAX_YAW=2.6, CAM_MAX_PITCH=0.85;   // how far the right stick can swing the view (rad)
 function updateCamera(e, dt){
   if(e.kind==='tank') return updateTankCam(e,dt);
   if(e.kind==='infantry') return updateInfCam(e,dt);
+  if(e.kind==='navy') return updateNavyCam(e,dt);
   e.cam.near=1; if(e.vm) e.vm.group.visible=false;
   _fwd.set(0,0,-1).applyQuaternion(e.quat);
   // ease free-look angles (right stick) toward their targets (recenters when released)
@@ -1386,10 +1524,11 @@ function updateEyeHUD(e, vw, vh){
   h.hullBar.style.width=Math.max(0,e.hull/e.stats.hull*100)+'%';
   if(e.kind==='tank'){ h.boostBar.style.width=(clamp(1-Math.max(0,e.mainCd)/TANK.mainReload,0,1)*100)+'%'; h.amt.textContent='🛢 '+e.ammo; h.alt.textContent='—'; h.spd.textContent=Math.round(Math.abs(e.speed)); }
   else if(e.kind==='infantry'){ h.boostBar.style.width=(e.stamina*100)+'%'; h.amt.textContent=(e.reloading>0?'RELOAD…':e.mag+'/'+INF.mag); h.alt.textContent='—'; h.spd.textContent=Math.round(Math.abs(e.speed)); }
+  else if(e.kind==='navy'){ h.boostBar.style.width=(clamp(1-Math.max(0,e.mainCd)/NAVY.mainReload,0,1)*100)+'%'; h.amt.textContent=(e.mgCd<=0?'🚢 TORP':'🚢 …'); h.alt.textContent='—'; h.spd.textContent=Math.round(Math.abs(e.speed)); }
   else { h.boostBar.style.width=(e.boostFuel*100)+'%'; h.amt.textContent='🚀 '+e.ammo; h.alt.textContent=Math.max(0,Math.round(e.pos.y-groundLevel(e.pos.x,e.pos.z))); h.spd.textContent=Math.round(e.speed); }
   // ADS overlays: sniper scope (infantry) / gunner sight (tank)
   h.scope.classList.toggle('on', e.kind==='infantry' && e.aim>0.5);
-  h.tanksight.classList.toggle('on', e.kind==='tank' && e.aim>0.5);
+  h.tanksight.classList.toggle('on', (e.kind==='tank'||e.kind==='navy') && e.aim>0.5);
 
   // cockpit instruments (artificial horizon + panel gauges)
   if(e.camMode==='cockpit'){
@@ -1479,7 +1618,7 @@ function animate(){ requestAnimationFrame(animate);
   if(gameState==='playing'){
     for(const hm of humans){ const inp = (hm.alive)? readInput(hm) : {pitch:0,roll:0,fire:false,boost:false,missile:false}; updateActor(hm,inp,dt); }
     for(const bt of bots){ const inp = bt.alive? aiFor(bt,dt) : {pitch:0,roll:0,fire:false,boost:false,missile:false}; updateActor(bt,inp,dt); }
-    updateBullets(dt); updateMissiles(dt); updateShells(dt); updatePickups(dt);
+    updateBullets(dt); updateMissiles(dt); updateShells(dt); updateBombs(dt); updateTorps(dt); updateStructures(dt); updatePickups(dt);
     if(mode==='coop') updateCoop(dt);
     else { for(const hm of humans){ if(!hm.alive && hm.respawnTimer<=0) respawnHuman(hm); } }
     updateCamera(humans[0],dt); updateCamera(humans[1],dt);
