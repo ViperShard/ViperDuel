@@ -740,8 +740,11 @@ const sfx=(()=>{ let ctx=null,master=null,sfxg=null,musicg=null,muted=false,mt=n
   const scale=[0,3,5,7,10], prog=[0,-2,3,-4];
   function musicTick(){ const c=ensure(); if(!c||muted||buffers.music) return; const bar=Math.floor(step/8)%prog.length, root=110*Math.pow(2,prog[bar]/12);
     const n=scale[step%scale.length], f=root*Math.pow(2,n/12);
-    tone(f,0.42,'triangle',0.05,null,musicg); tone(f*2,0.3,'sine',0.022,null,musicg);
-    if(step%4===0) tone(root/2,0.7,'sawtooth',0.05,null,musicg);
+    tone(f,0.5,'triangle',0.05,null,musicg); tone(f*1.5,0.34,'triangle',0.02,null,musicg); tone(f*2,0.34,'sine',0.02,null,musicg);
+    tone(f*4,0.16,'square',0.012,null,musicg);                 // shimmer lead
+    if(step%4===0) tone(root/2,0.95,'sawtooth',0.06,null,musicg);  // bass swell
+    if(step%2===0){ const t=ensure(); if(t){ const o=t.createOscillator(),g=t.createGain(); o.type='sine'; o.frequency.setValueAtTime(120,t.currentTime); o.frequency.exponentialRampToValueAtTime(45,t.currentTime+0.12);
+      g.gain.setValueAtTime(0.10,t.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,t.currentTime+0.16); o.connect(g); g.connect(musicg); o.start(); o.stop(t.currentTime+0.16); } } // kick
     step++; }
   // ---- real-audio loader: drop files in audio/, else procedural fallback ----
   const FILES={ music:'audio/music.mp3', explosion:'audio/explosion.mp3', cannon:'audio/cannon.mp3', rifle:'audio/rifle.mp3',
@@ -856,16 +859,42 @@ function respawnHuman(e){ const a=Math.random()*Math.PI*2,d=CFG.playRadius*(0.3+
 
 const ENEMY_PLANES=['scout','falcon','striker','inter'];
 function spawnBot(w){
-  const e=baseEntity(); e.team='enemy'; e.ai={ jitter:Math.random()*6, skill:clamp(0.6+w*0.05,0.6,1.3) };
-  const defBase=PLANES.find(p=>p.id===ENEMY_PLANES[Math.min(ENEMY_PLANES.length-1,Math.floor(Math.random()*Math.min(ENEMY_PLANES.length,1+Math.floor(w/2))))]);
-  const def={ ...defBase, livery:0x7a2a2a, stats:{ ...defBase.stats, hull:Math.round(defBase.stats.hull*(0.8+w*0.1)), dmg:defBase.stats.dmg*0.6 } };
-  e.def=def; e.stats=def.stats; e.tracer=TEAMCOL.enemy.glow;
-  e.visuals=buildPlaneModel(def, TEAMCOL.enemy.glow); scene.add(e.visuals.group);
-  const a=Math.random()*Math.PI*2, d=CFG.playRadius*(0.7+Math.random()*0.3);
-  const pos=new THREE.Vector3(Math.cos(a)*d,0,Math.sin(a)*d); pos.y=groundLevel(pos.x,pos.z)+500+Math.random()*300;
-  resetEntityFlight(e,pos,headingToCenter(pos)); e.invuln=1.0;
+  const e=baseEntity(); e.team='enemy'; e.ai={ skill:clamp(0.6+w*0.05,0.6,1.3) };
+  const glow=TEAMCOL.enemy.glow; e.tracer=glow;
+  const r=Math.random();
+  e.kind = (w>=2 && r<0.34) ? 'tank' : (w>=2 && r<0.62) ? 'infantry' : 'air';
+  if(e.kind==='tank'){ e.def={livery:0x5a2622}; e.stats={...TANK, hull:Math.round(TANK.hull*(0.7+w*0.08)), shellDmg:TANK.shellDmg*0.7, mgDmg:TANK.mgDmg*0.7}; e.visuals=buildTank(glow); }
+  else if(e.kind==='infantry'){ e.def={livery:0x4a2622}; e.stats={...INF, hull:Math.round(INF.hull*(0.8+w*0.06)), rifleDmg:INF.rifleDmg*0.6}; e.visuals=buildSoldier(glow); }
+  else { const base=PLANES.find(p=>p.id===ENEMY_PLANES[Math.min(ENEMY_PLANES.length-1,Math.floor(Math.random()*Math.min(ENEMY_PLANES.length,1+Math.floor(w/2))))]);
+    const def={...base, livery:0x7a2a2a, stats:{...base.stats, hull:Math.round(base.stats.hull*(0.8+w*0.1)), dmg:base.stats.dmg*0.6}}; e.def=def; e.stats=def.stats; e.visuals=buildPlaneModel(def,glow); }
+  scene.add(e.visuals.group);
+  const a=Math.random()*Math.PI*2, d=CFG.playRadius*(0.6+Math.random()*0.35);
+  const pos=new THREE.Vector3(Math.cos(a)*d,0,Math.sin(a)*d);
+  pos.y = e.kind==='air' ? groundLevel(pos.x,pos.z)+420+Math.random()*280 : groundLevel(pos.x,pos.z)+(e.kind==='tank'?0:INF.stand);
+  const heading=headingToCenter(pos);
+  e.pos.copy(pos); e.heading=heading; e.turretYaw=heading; e.alive=true; e.dead=false; e.invuln=1.0;
+  e.hull=e.stats.hull; e.speed=(e.kind==='air'?e.stats.speed:0);
+  e.ammo=(e.kind==='tank'?20:(e.kind==='air'?e.stats.missiles:0)); e.mag=INF.mag;
+  e.vy=0; e.cooldown=0; e.mainCd=0; e.mgCd=0; e.reloading=0; e.boostFuel=1; e.pitch=0; e.roll=0; e.turretPitch=0; e.ctrl={pitch:0,roll:0};
   bots.push(e);
 }
+// ground bot AI: steer body at nearest human, advance, fire when lined up
+function aiInputGround(e,dt){
+  const inp={pitch:0,roll:0,fire:false,fireRT:false,missile:false,boost:false,jump:false,lookX:0,lookY:0,aim:0,view:false};
+  let tgt=null,bd=1e9; for(const h of humans){ if(!h.alive) continue; const d=h.pos.distanceTo(e.pos); if(d<bd){bd=d;tgt=h;} }
+  if(!tgt) return inp;
+  const dx=tgt.pos.x-e.pos.x, dz=tgt.pos.z-e.pos.z, D=Math.hypot(dx,dz)||1, Dx=dx/D, Dz=dz/D;
+  const Fx=-Math.sin(e.heading), Fz=-Math.cos(e.heading);
+  const theta=Math.atan2(Fz*Dx-Fx*Dz, Fx*Dx+Fz*Dz);   // signed bearing error
+  inp.roll=clamp(-theta*1.5,-1,1);
+  const stop = e.kind==='tank'?110:46;
+  inp.pitch = D>stop ? 1 : (D<stop*0.6 ? -0.25 : 0);
+  const aligned=Math.abs(theta)<0.13;
+  if(e.kind==='tank'){ if(aligned&&D<300) inp.fire=true; if(aligned&&D<170) inp.missile=true; }
+  else { if(aligned&&D<175) inp.fire=true; }
+  return inp;
+}
+function aiFor(e,dt){ return e.kind==='air' ? aiInput(e,dt) : aiInputGround(e,dt); }
 function startWave(){ wave++; const count=Math.min(2+wave,7); for(let i=0;i<count;i++) spawnBot(wave);
   announce('WAVE '+wave); waveState='active'; }
 
@@ -1449,7 +1478,7 @@ function animate(){ requestAnimationFrame(animate);
 
   if(gameState==='playing'){
     for(const hm of humans){ const inp = (hm.alive)? readInput(hm) : {pitch:0,roll:0,fire:false,boost:false,missile:false}; updateActor(hm,inp,dt); }
-    for(const bt of bots){ const inp = bt.alive? aiInput(bt,dt) : {pitch:0,roll:0,fire:false,boost:false,missile:false}; updateFlight(bt,inp,dt); }
+    for(const bt of bots){ const inp = bt.alive? aiFor(bt,dt) : {pitch:0,roll:0,fire:false,boost:false,missile:false}; updateActor(bt,inp,dt); }
     updateBullets(dt); updateMissiles(dt); updateShells(dt); updatePickups(dt);
     if(mode==='coop') updateCoop(dt);
     else { for(const hm of humans){ if(!hm.alive && hm.respawnTimer<=0) respawnHuman(hm); } }
