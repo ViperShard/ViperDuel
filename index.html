@@ -104,6 +104,12 @@
   .warning{ position:absolute; left:50%; top:24%; transform:translateX(-50%); color:#ff5a5a; font-weight:800; letter-spacing:3px; font-size:19px; text-shadow:0 0 14px rgba(255,60,60,0.7); animation:blink .55s steps(2) infinite; white-space:nowrap; }
   @keyframes blink{ 50%{opacity:.2;} }
   .hitflash{ position:absolute; inset:0; background:radial-gradient(ellipse at center, transparent 35%, rgba(255,40,40,0.5) 100%); opacity:0; transition:opacity .1s; }
+  /* cockpit canopy frame (shown only in cockpit view) */
+  .vignette{ position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .25s;
+             background:radial-gradient(ellipse 78% 80% at 50% 46%, transparent 56%, rgba(0,0,0,0.62) 100%); }
+  .eye.cockpit .vignette{ opacity:1; }
+  .vignette:before{ content:''; position:absolute; left:50%; top:0; height:46%; width:6px; transform:translateX(-50%);
+                    background:linear-gradient(180deg, rgba(10,16,26,0.85), rgba(10,16,26,0)); }   /* canopy bow */
 
   /* center top HUD */
   #centerHud{ position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:5; text-align:center; pointer-events:none; }
@@ -150,17 +156,17 @@
     <div class="pcard" id="p1card">
       <h2>PLAYER 1</h2>
       <div class="hint" id="p1hint">Choose controls</div>
-      <button class="opt" data-player="1" data-scheme="wasd">⌨ WASD<small>W/S pitch · A/D bank · Space guns · Q missile · LShift boost</small></button>
-      <button class="opt" data-player="1" data-scheme="ijkl">⌨ IJKL<small>I/K pitch · J/L bank · Enter guns · U missile · RShift boost</small></button>
-      <button class="opt" data-player="1" data-scheme="gamepad">🎮 Xbox<small>L-stick fly · R-stick look · RT/A guns · B missile · LT boost</small></button>
+      <button class="opt" data-player="1" data-scheme="wasd">⌨ WASD<small>W/S pitch · A/D bank · Space guns · Q missile · LShift boost · E aim · C cockpit</small></button>
+      <button class="opt" data-player="1" data-scheme="ijkl">⌨ IJKL<small>I/K pitch · J/L bank · Enter guns · U missile · RShift boost · O aim · M cockpit</small></button>
+      <button class="opt" data-player="1" data-scheme="gamepad">🎮 Xbox<small>L-stick fly · R-stick look · RT/A guns · LT aim · RB boost · B missile · Y cockpit</small></button>
       <div class="planesel" id="psel1"></div>
     </div>
     <div class="pcard" id="p2card">
       <h2>PLAYER 2</h2>
       <div class="hint" id="p2hint">Choose controls</div>
-      <button class="opt" data-player="2" data-scheme="wasd">⌨ WASD<small>W/S pitch · A/D bank · Space guns · Q missile · LShift boost</small></button>
-      <button class="opt" data-player="2" data-scheme="ijkl">⌨ IJKL<small>I/K pitch · J/L bank · Enter guns · U missile · RShift boost</small></button>
-      <button class="opt" data-player="2" data-scheme="gamepad">🎮 Xbox<small>L-stick fly · R-stick look · RT/A guns · B missile · LT boost</small></button>
+      <button class="opt" data-player="2" data-scheme="wasd">⌨ WASD<small>W/S pitch · A/D bank · Space guns · Q missile · LShift boost · E aim · C cockpit</small></button>
+      <button class="opt" data-player="2" data-scheme="ijkl">⌨ IJKL<small>I/K pitch · J/L bank · Enter guns · U missile · RShift boost · O aim · M cockpit</small></button>
+      <button class="opt" data-player="2" data-scheme="gamepad">🎮 Xbox<small>L-stick fly · R-stick look · RT/A guns · LT aim · RB boost · B missile · Y cockpit</small></button>
       <div class="planesel" id="psel2"></div>
     </div>
   </div>
@@ -314,55 +320,86 @@ const sun=makeGlow(0xfff0c0,1500); sun.position.copy(sunLight.position.clone().s
 // =====================================================================
 //  PLANE MODEL BUILDER
 // =====================================================================
+// a real, tapered/swept wing pair built from a box whose tip verts are tapered, swept and given dihedral
+function buildWingPair(span, rootC, tipC, sweep, dih, thick, mat){
+  const grp=new THREE.Group();
+  for(const side of [1,-1]){
+    const geo=new THREE.BoxGeometry(span, thick, rootC, 5,1,1);
+    geo.translate(span/2,0,0);                       // inboard edge at x=0
+    const p=geo.attributes.position;
+    for(let i=0;i<p.count;i++){
+      const f=clamp(p.getX(i)/span,0,1);
+      p.setZ(i, p.getZ(i)*(1-f*(1-tipC/rootC)) + f*sweep);   // taper toward tip + sweep back
+      p.setY(i, p.getY(i) + f*dih);                          // dihedral
+    }
+    geo.computeVertexNormals();
+    const m=new THREE.Mesh(geo,mat); m.scale.x=side; grp.add(m);
+  }
+  return grp;
+}
 function buildPlaneModel(def, teamGlow){
-  const g=new THREE.Group();
-  const body=new THREE.MeshStandardMaterial({color:def.livery, metalness:0.45, roughness:0.5});
-  const accent=new THREE.MeshStandardMaterial({color:0xb7c2d6, metalness:0.5, roughness:0.5});
-  const dark=new THREE.MeshStandardMaterial({color:0x20262f, metalness:0.4, roughness:0.6});
+  const tier=def.unlock, g=new THREE.Group();
+  const metal=new THREE.MeshStandardMaterial({color:def.livery, metalness:0.6, roughness:0.42});
+  const dark =new THREE.MeshStandardMaterial({color:0x1c2128, metalness:0.6, roughness:0.5});
+  const wingMat=new THREE.MeshStandardMaterial({color:def.livery, metalness:0.5, roughness:0.48, side:THREE.DoubleSide});
+  const trim =new THREE.MeshStandardMaterial({color:teamGlow, emissive:teamGlow, emissiveIntensity:0.35+Math.min(tier,14)*0.11, metalness:0.4, roughness:0.3});
 
-  // fuselage
-  const fuse=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.0,13,14), body); fuse.rotation.x=Math.PI/2; g.add(fuse);
-  const nose=new THREE.Mesh(new THREE.ConeGeometry(1.5,3.2,14), body); nose.rotation.x=-Math.PI/2; nose.position.z=-8; g.add(nose);
+  const L=13;
+  // fuselage: nose cone (-Z forward) + body + tapered tail (+Z aft)
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(1.25,1.05,L,20), metal); body.rotation.x=Math.PI/2; g.add(body);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(1.25,4.6,20), metal); nose.rotation.x=-Math.PI/2; nose.position.z=-L/2-2.1; g.add(nose);
+  const tailc=new THREE.Mesh(new THREE.CylinderGeometry(1.05,0.5,3,16), metal); tailc.rotation.x=Math.PI/2; tailc.position.z=L/2+1.4; g.add(tailc);
+  const spine=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.35,L*0.78), trim); spine.position.set(0,1.05,0); g.add(spine);
 
-  // wings by type
-  const wingMat=accent; let wing;
-  if(def.wing==='straight'){ wing=new THREE.Mesh(new THREE.BoxGeometry(21,0.5,3.8),wingMat); wing.position.z=0.6; }
-  else if(def.wing==='swept'){ wing=new THREE.Mesh(new THREE.BoxGeometry(19,0.5,4.2),wingMat); wing.position.z=1.2; wing.rotation.y=0; wing.geometry.translate(0,0,0); wing.rotation.x=0; }
-  else if(def.wing==='delta'){ wing=new THREE.Mesh(new THREE.CylinderGeometry(0.1,9,4.4,3),wingMat); wing.rotation.x=Math.PI/2; wing.rotation.z=Math.PI; wing.scale.set(1,1,1); wing.position.z=2; }
-  else { wing=new THREE.Mesh(new THREE.BoxGeometry(20,0.5,3.6),wingMat); wing.position.z=-0.4; } // fswept
-  g.add(wing);
-  if(def.wing==='swept'||def.wing==='fswept'){ // add swept look with two angled panels
-    const sgn=def.wing==='swept'?1:-1;
-    for(const s of [-1,1]){ const p=new THREE.Mesh(new THREE.BoxGeometry(9,0.5,3.4),wingMat); p.position.set(s*6.5,0,0.6+sgn*1.6); p.rotation.y=s*sgn*0.5; g.add(p); }
+  // canopy
+  const canopy=new THREE.Mesh(new THREE.SphereGeometry(1.12,16,12),
+    new THREE.MeshStandardMaterial({color:0x0a1422, metalness:0.4, roughness:0.07, emissive:teamGlow, emissiveIntensity:0.3}));
+  canopy.scale.set(0.92,0.8,2.0); canopy.position.set(0,0.95,-2.7); g.add(canopy);
+
+  // main wings (proper tapered/swept planform per type)
+  const W={ straight:{span:18,root:4.2,tip:2.6,sweep:1.2,dih:0.6},
+            swept:   {span:17,root:4.6,tip:2.1,sweep:4.6,dih:0.4},
+            delta:   {span:15,root:7.6,tip:1.1,sweep:6.6,dih:0.2},
+            fswept:  {span:17,root:4.4,tip:2.4,sweep:-3.9,dih:0.5} }[def.wing] || {span:18,root:4.2,tip:2.6,sweep:1.2,dih:0.6};
+  const wings=buildWingPair(W.span,W.root,W.tip,W.sweep,W.dih,0.4,wingMat); wings.position.z=0.6; g.add(wings);
+  for(const sx of [-1,1]){ const t=makeGlow(teamGlow,5.5); t.position.set(sx*W.span/2, W.dih, 0.6+W.sweep); g.add(t); }
+
+  // tail surfaces
+  const ht=buildWingPair(7.5,2.4,1.4,2.0,0.2,0.32,wingMat); ht.position.z=L/2+0.7; g.add(ht);
+  if(tier>=8 || def.id==='warhawk'){ for(const sx of [-1,1]){ const vf=new THREE.Mesh(new THREE.BoxGeometry(0.38,2.8,2.3),wingMat); vf.position.set(sx*1.5,1.3,L/2+0.5); vf.rotation.z=sx*0.34; g.add(vf);} }
+  else { const vf=new THREE.Mesh(new THREE.BoxGeometry(0.4,3.0,2.5),wingMat); vf.position.set(0,1.55,L/2+0.5); g.add(vf); }
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.5,1.7,0.6),trim); stripe.position.set(0,1.85,L/2+0.55); g.add(stripe);
+
+  // canards (mid+ tier = more agile look)
+  if(tier>=5){ const can=buildWingPair(6,2.0,1.0,1.8,0.3,0.28,wingMat); can.position.set(0,0.15,-L/2+1.6); g.add(can); }
+
+  // air intakes (jets)
+  if(!def.prop){ for(const sx of [-1,1]){ const intk=new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.85,3,12,1,true), dark); intk.rotation.x=Math.PI/2; intk.position.set(sx*1.45,-0.15,-1.2); g.add(intk);} }
+
+  // engines + afterburner (bigger/brighter with tier)
+  const flames=[]; const ePos=def.engines===2?[-1.6,1.6]:[0];
+  for(const ex of ePos){
+    const noz=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.82,1.5,14), dark); noz.rotation.x=Math.PI/2; noz.position.set(ex,0,L/2+2.5); g.add(noz);
+    const fm=new THREE.MeshBasicMaterial({color:teamGlow,transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
+    const fl=new THREE.Mesh(new THREE.ConeGeometry(0.66,3.4+tier*0.16,12),fm); fl.rotation.x=Math.PI/2; fl.position.set(ex,0,L/2+4.0); g.add(fl);
+    const eg=makeGlow(teamGlow,5.5+tier*0.45); eg.position.set(ex,0,L/2+3.0); g.add(eg); flames.push({fl,fm});
   }
 
-  // tail
-  const tail=new THREE.Mesh(new THREE.BoxGeometry(8,0.4,2.2),accent); tail.position.z=6; g.add(tail);
-  if(def.id==='warhawk'){ for(const s of [-1,1]){ const vt=new THREE.Mesh(new THREE.BoxGeometry(0.5,2.6,2.2),accent); vt.position.set(s*3,1.2,6); vt.rotation.z=s*0.25; g.add(vt);} }
-  else { const vstab=new THREE.Mesh(new THREE.BoxGeometry(0.5,3,2.4),accent); vstab.position.set(0,1.5,6.2); g.add(vstab); }
-
-  // canopy (team-glow tinted)
-  const canopy=new THREE.Mesh(new THREE.SphereGeometry(1.2,14,10), new THREE.MeshStandardMaterial({color:0x0a1422,metalness:0.3,roughness:0.1,emissive:teamGlow,emissiveIntensity:0.3}));
-  canopy.scale.set(1,0.8,1.9); canopy.position.set(0,1.0,-1.6); g.add(canopy);
-
-  // engines / exhaust
-  const flames=[]; const ePos = def.engines===2 ? [-2.6,2.6] : [0];
-  for(const ex of ePos){ const fm=new THREE.MeshBasicMaterial({color:teamGlow,transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
-    const fl=new THREE.Mesh(new THREE.ConeGeometry(0.9,4,10),fm); fl.rotation.x=Math.PI/2; fl.position.set(ex,0,7.4); g.add(fl);
-    const eg=makeGlow(teamGlow,7); eg.position.set(ex,0,7.6); g.add(eg); flames.push({fl,fm}); }
-
-  // propeller (scout)
+  // propeller
   let prop=null;
-  if(def.prop){ prop=new THREE.Group(); const hub=new THREE.Mesh(new THREE.SphereGeometry(0.6,8,8),dark); prop.add(hub);
-    for(let i=0;i<3;i++){ const bl=new THREE.Mesh(new THREE.BoxGeometry(0.4,7,0.6),dark); bl.rotation.z=i*Math.PI*2/3; prop.add(bl); }
-    prop.position.z=-9.6; g.add(prop); }
+  if(def.prop){ prop=new THREE.Group(); const hub=new THREE.Mesh(new THREE.ConeGeometry(0.55,1.4,10),dark); hub.rotation.x=-Math.PI/2; hub.position.z=-0.4; prop.add(hub);
+    for(let i=0;i<3;i++){ const bl=new THREE.Mesh(new THREE.BoxGeometry(0.32,8,0.55),dark); bl.rotation.z=i*Math.PI*2/3; prop.add(bl);}
+    prop.position.z=-L/2-4.4; g.add(prop); }
 
-  // team-color wingtip lights
-  for(const ex of [-10,10]){ const t=makeGlow(teamGlow,6.5); t.position.set(ex,0.4,wing.position.z); g.add(t); }
-  // a colored stripe on the tail for team ID
-  const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.55,2.4,0.6), new THREE.MeshStandardMaterial({color:teamGlow,emissive:teamGlow,emissiveIntensity:0.5})); stripe.position.set(0,1.4,6.4); g.add(stripe);
+  // underwing missiles (more hardpoints = heavier loadout)
+  const hard=Math.min(def.stats.missiles,3);
+  for(let h=0;h<hard;h++){ for(const sx of [-1,1]){ const ms=new THREE.Mesh(new THREE.CapsuleGeometry(0.22,1.5,4,6),dark); ms.rotation.x=Math.PI/2; ms.position.set(sx*(2.6+h*2.0),-0.55,1.0); g.add(ms);} }
 
-  g.scale.setScalar(1.45);
+  // top-tier neon rings
+  if(tier>=10){ const r1=new THREE.Mesh(new THREE.TorusGeometry(1.35,0.07,8,24),trim); r1.position.z=L/2+2.2; g.add(r1);
+    const r2=r1.clone(); r2.position.z=-L/2-0.6; g.add(r2); }
+
+  g.scale.setScalar(1.3);
   return { group:g, flames, prop };
 }
 
@@ -374,7 +411,7 @@ function baseEntity(){
   return { pos:new THREE.Vector3(), quat:new THREE.Quaternion(), heading:0, pitch:0, roll:0, speed:150,
     hull:100, alive:true, invuln:0, cooldown:0, collCooldown:0, respawnTimer:0,
     ctrl:{pitch:0,roll:0}, boostFuel:1, ammo:2, reload:0, smoking:false,
-    lookX:0, lookY:0, camYaw:0, camPitch:0,
+    lookX:0, lookY:0, camYaw:0, camPitch:0, aim:0, aimRaw:0, camMode:'chase', _viewHeld:false,
     stats:null, visuals:null, team:null, isHuman:false, dead:false };
 }
 function makeHuman(num){ const e=baseEntity(); e.isHuman=true; e.num=num; e.scheme=null; e.gamepadIndex=-1; e.planeIdx=0;
@@ -541,13 +578,15 @@ function readInput(e){
     const ax=n=>{ let v=gp.axes[n]||0; const a=Math.abs(v); if(a<dz) return 0; v=(v-Math.sign(v)*dz)/(1-dz); return v*(0.45*v*v+0.55); };
     const lx=ax(0), ly=ax(1), rx=ax(2), ry=ax(3);   // left stick = fly, right stick = look/camera
     const fire=(gp.buttons[0]&&gp.buttons[0].pressed)||(gp.buttons[7]&&gp.buttons[7].value>0.3);
-    const boost=(gp.buttons[6]&&gp.buttons[6].value>0.3)||(gp.buttons[10]&&gp.buttons[10].pressed);
-    const missile=gp.buttons[1]&&gp.buttons[1].pressed;
-    return {pitch:-ly,roll:lx,fire:!!fire,boost:!!boost,missile:!!missile,lookX:rx,lookY:-ry}; }
+    const aim=gp.buttons[6]?gp.buttons[6].value:0;                 // LT = aim/zoom (War-Thunder style)
+    const boost=(gp.buttons[5]&&gp.buttons[5].pressed)||(gp.buttons[10]&&gp.buttons[10].pressed); // RB / L3 = boost
+    const missile=gp.buttons[1]&&gp.buttons[1].pressed;            // B = missile
+    const view=gp.buttons[3]&&gp.buttons[3].pressed;               // Y = toggle cockpit / chase
+    return {pitch:-ly,roll:lx,fire:!!fire,boost:!!boost,missile:!!missile,lookX:rx,lookY:-ry,aim,view:!!view}; }
   if(e.scheme==='wasd') return { pitch:(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0), roll:(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0),
-    fire:keys.has('Space'), boost:keys.has('ShiftLeft'), missile:keys.has('KeyQ') };
+    fire:keys.has('Space'), boost:keys.has('ShiftLeft'), missile:keys.has('KeyQ'), aim:keys.has('KeyE')?1:0, view:keys.has('KeyC') };
   return { pitch:(keys.has('KeyI')?1:0)-(keys.has('KeyK')?1:0), roll:(keys.has('KeyL')?1:0)-(keys.has('KeyJ')?1:0),
-    fire:keys.has('Enter'), boost:keys.has('ShiftRight'), missile:keys.has('KeyU') };
+    fire:keys.has('Enter'), boost:keys.has('ShiftRight'), missile:keys.has('KeyU'), aim:keys.has('KeyO')?1:0, view:keys.has('KeyM') };
 }
 
 // =====================================================================
@@ -588,7 +627,8 @@ function makeEyeHUD(num){ const col=TEAMCOL[num];
     <div class="offarrow hidden"></div>
     <canvas class="radar" width="120" height="120"></canvas>
     <div class="warning hidden"></div>
-    <div class="hitflash"></div>`;
+    <div class="hitflash"></div>
+    <div class="vignette"></div>`;
   document.body.appendChild(eye);
   return { root:eye, hullBar:eye.querySelector('.hull>i'), boostBar:eye.querySelector('.boost>i'), score:eye.querySelector('.killrow b'),
     alt:eye.querySelector('.alt'), spd:eye.querySelector('.spd'), amt:eye.querySelector('.amt'),
@@ -650,10 +690,13 @@ function clearWorld(){ for(const b of bullets) scene.remove(b.mesh); bullets.len
 function startGame(){
   clearWorld();
   // assign teams + planes + visuals
-  humans.forEach((e,i)=>{ e.score=0; e.dead=false; e.respawnTimer=0;
+  humans.forEach((e,i)=>{ e.score=0; e.dead=false; e.respawnTimer=0; e.camMode='chase';
     e.team = mode==='coop' ? 'ally' : (i===0?1:2);
     const def=PLANES[e.planeIdx]; buildVisualsFor(e, def, TEAMCOL[i===0?1:2].glow);
+    e.visuals.group.traverse(o=>o.layers.set(e.num));   // own plane on its own render layer (for cockpit hide)
     spawnHuman(e,i); updateBars(e); });
+  // both eyes see the world (layer 0) + both planes (layers 1 & 2); cockpit view disables the pilot's own layer
+  humans.forEach(h=>{ h.cam.layers.enable(1); h.cam.layers.enable(2); });
   if(mode==='coop'){ teamLives=5; wave=0; waveState='intermission'; waveTimer=2.5; }
   setup.classList.add('hidden'); gameoverEl.classList.add('hidden'); showEyes(true);
   gameState='playing'; sfx.init();
@@ -800,7 +843,9 @@ function aiInput(e, dt){
 
 function updateFlight(e, input, dt){
   const s=e.stats;
-  e.lookX=input.lookX||0; e.lookY=input.lookY||0;
+  e.lookX=input.lookX||0; e.lookY=input.lookY||0; e.aimRaw=input.aim||0;
+  if(input.view && !e._viewHeld) e.camMode = (e.camMode==='cockpit'?'chase':'cockpit');
+  e._viewHeld=!!input.view;
   if(e.alive){
     // smooth control input — frame-rate-independent easing (no jerk, consistent at any FPS)
     const ks=1-Math.exp(-dt*14);
@@ -929,29 +974,48 @@ function updatePickups(dt){ pickupTimer-=dt; if(pickupTimer<=0){ spawnPickup(); 
 // =====================================================================
 //  CHASE CAM
 // =====================================================================
-const _cp=new THREE.Vector3(),_lk=new THREE.Vector3(),_wUp=new THREE.Vector3(0,1,0),_back=new THREE.Vector3(),_rax=new THREE.Vector3();
+const _cp=new THREE.Vector3(),_lk=new THREE.Vector3(),_wUp=new THREE.Vector3(0,1,0),_back=new THREE.Vector3(),_rax=new THREE.Vector3(),_he=new THREE.Euler(),_hq=new THREE.Quaternion();
 const CAM_MAX_YAW=2.7, CAM_MAX_PITCH=0.95;   // how far the right stick can swing the view (rad)
 function updateCamera(e, dt){
   _fwd.set(0,0,-1).applyQuaternion(e.quat);
-  // ease the free-look angles toward the right-stick target (recenters smoothly when released)
+  // ease free-look angles (right stick) + aim zoom toward their targets
   const ka=1-Math.exp(-dt*10);
   e.camYaw   += ((e.lookX||0)*CAM_MAX_YAW   - e.camYaw)*ka;
   e.camPitch += ((e.lookY||0)*CAM_MAX_PITCH - e.camPitch)*ka;
-  // base chase offset (behind + above), then orbit it by the look angles
-  _back.copy(_fwd).multiplyScalar(-36).addScaledVector(_wUp,13);
-  if(e.camYaw||e.camPitch){
-    _back.applyAxisAngle(_wUp, e.camYaw);
-    _rax.crossVectors(_wUp,_back);
-    if(_rax.lengthSq()>1e-6){ _rax.normalize(); _back.applyAxisAngle(_rax, e.camPitch); }
+  e.aim += ((e.aimRaw||0) - e.aim)*(1-Math.exp(-dt*12));
+  const ownLayer=e.num||1;   // hide own plane only in cockpit view
+
+  if(e.camMode==='cockpit'){
+    e.cam.layers.disable(ownLayer);
+    e.hud && e.hud.root.classList.add('cockpit');
+    // eye at the canopy, looking forward, rolling with the plane + head free-look
+    _back.set(0,1.3,-3.2).applyQuaternion(e.quat);
+    _cp.copy(e.pos).add(_back);
+    const gl=groundLevel(_cp.x,_cp.z)+2; if(_cp.y<gl) _cp.y=gl;
+    e.cam.position.copy(_cp); e.camInit=true;
+    _hq.setFromEuler(_he.set(e.camPitch, e.camYaw, 0, 'YXZ'));
+    e.cam.quaternion.copy(e.quat).multiply(_hq);
+    const baseFov=72; e.cam.fov=lerp(baseFov, baseFov*0.42, e.aim);
+  } else {
+    e.cam.layers.enable(ownLayer);
+    e.hud && e.hud.root.classList.remove('cockpit');
+    // chase orbit; aim pulls camera in tight + straightens behind for a gunsight
+    const dist=lerp(36, 24, e.aim), high=lerp(13, 8, e.aim);
+    _back.copy(_fwd).multiplyScalar(-dist).addScaledVector(_wUp,high);
+    if(e.camYaw||e.camPitch){
+      _back.applyAxisAngle(_wUp, e.camYaw);
+      _rax.crossVectors(_wUp,_back);
+      if(_rax.lengthSq()>1e-6){ _rax.normalize(); _back.applyAxisAngle(_rax, e.camPitch); }
+    }
+    _cp.copy(e.pos).add(_back);
+    const gl=groundLevel(_cp.x,_cp.z)+9; if(_cp.y<gl) _cp.y=gl;
+    if(!e.camInit){ e.cam.position.copy(_cp); e.camInit=true; } else e.cam.position.lerp(_cp, 1-Math.exp(-dt*9));
+    e.cam.up.copy(_wUp);
+    const lookMag=Math.min(1, Math.abs(e.camYaw)/CAM_MAX_YAW + Math.abs(e.camPitch)/CAM_MAX_PITCH);
+    _lk.copy(e.pos).addScaledVector(_fwd, lerp(62, 2, lookMag));
+    e.cam.lookAt(_lk);
+    const baseFov=62; e.cam.fov=lerp(baseFov, baseFov*0.45, e.aim);
   }
-  _cp.copy(e.pos).add(_back);
-  const gl=groundLevel(_cp.x,_cp.z)+9; if(_cp.y<gl) _cp.y=gl;
-  if(!e.camInit){ e.cam.position.copy(_cp); e.camInit=true; } else e.cam.position.lerp(_cp, 1-Math.exp(-dt*9));
-  e.cam.up.copy(_wUp);
-  // look ahead in normal flight; pull the aim toward the plane while looking around (so it frames the bandit on your six)
-  const lookMag=Math.min(1, Math.abs(e.camYaw)/CAM_MAX_YAW + Math.abs(e.camPitch)/CAM_MAX_PITCH);
-  _lk.copy(e.pos).addScaledVector(_fwd, lerp(62, 2, lookMag));
-  e.cam.lookAt(_lk);
 }
 
 // =====================================================================
