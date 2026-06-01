@@ -144,6 +144,17 @@
   .cpanel .cg{ width:60px; text-align:center; background:rgba(8,14,24,0.6); border:1px solid rgba(150,190,255,0.28); border-radius:8px; padding:5px 2px; }
   .cpanel .cg b{ display:block; font-size:17px; color:#bfe0ff; font-variant-numeric:tabular-nums; text-shadow:0 0 6px rgba(120,200,255,0.6); }
   .cpanel .cg span{ font-size:9px; color:#7e93b8; letter-spacing:2px; }
+  /* ADS overlays */
+  .scope,.tanksight{ position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .12s; }
+  .scope.on,.tanksight.on{ opacity:1; }
+  .scope{ background:radial-gradient(circle at 50% 50%, transparent 26%, rgba(0,0,0,0.55) 27%, #000 33%); }
+  .scope .sring{ position:absolute; left:50%; top:50%; width:52vh; height:52vh; max-width:90%; max-height:90%; transform:translate(-50%,-50%); border:2px solid rgba(0,0,0,0.85); border-radius:50%; box-shadow:0 0 0 3px rgba(80,120,80,0.25) inset; }
+  .scope .sh,.scope .sv{ position:absolute; background:rgba(10,30,10,0.9); }
+  .scope .sh{ left:50%; top:50%; width:42vh; max-width:80%; height:1px; transform:translate(-50%,-50%); }
+  .scope .sv{ left:50%; top:50%; height:42vh; max-height:80%; width:1px; transform:translate(-50%,-50%); }
+  .tanksight .tring{ position:absolute; left:50%; top:50%; width:220px; height:220px; transform:translate(-50%,-50%); border:1px solid rgba(255,90,50,0.65); border-radius:50%; box-shadow:0 0 12px rgba(255,80,40,0.3) inset; }
+  .tanksight .tchev{ position:absolute; left:50%; top:50%; width:0; height:0; transform:translate(-50%,4px); border-left:9px solid transparent; border-right:9px solid transparent; border-top:14px solid rgba(255,90,50,0.9); }
+  .tanksight .th{ position:absolute; left:50%; top:50%; width:300px; max-width:70%; height:1px; transform:translate(-50%,-50%); background:rgba(255,90,50,0.55); }
 
   /* center top HUD */
   #centerHud{ position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:5; text-align:center; pointer-events:none; }
@@ -362,6 +373,28 @@ const sun=makeGlow(0xfff0c0,1500); sun.position.copy(sunLight.position.clone().s
     const sc=500+Math.random()*900; s.scale.set(sc,sc*0.55,1); const a=Math.random()*Math.PI*2,d=Math.random()*CFG.playRadius*1.3;
     s.position.set(Math.cos(a)*d,360+Math.random()*680,Math.sin(a)*d); scene.add(s); } })();
 
+// trees (instanced) — scattered on land, skipping water and high mountains
+(function(){ const N=520, m=new THREE.Matrix4(), sc=new THREE.Vector3();
+  const trunkGeo=new THREE.CylinderGeometry(0.5,0.85,6,6); trunkGeo.translate(0,3,0);
+  const folGeo=new THREE.ConeGeometry(3.4,9,7); folGeo.translate(0,9.5,0);
+  const trunks=new THREE.InstancedMesh(trunkGeo,new THREE.MeshStandardMaterial({color:0x5b452c,roughness:1}),N);
+  const fol=new THREE.InstancedMesh(folGeo,new THREE.MeshStandardMaterial({color:0x2f5d34,roughness:1,flatShading:true}),N);
+  let n=0; for(let i=0;i<N*4 && n<N;i++){ const a=Math.random()*Math.PI*2,d=140+Math.random()*(CFG.playRadius*0.95-140);
+    const x=Math.cos(a)*d,z=Math.sin(a)*d,y=terrainHeight(x,z); if(y<8||y>300) continue;
+    const s=0.8+Math.random()*1.3; sc.set(s,s,s); m.makeRotationY(Math.random()*6.28); m.scale(sc); m.setPosition(x,y,z);
+    trunks.setMatrixAt(n,m); fol.setMatrixAt(n,m); n++; }
+  trunks.count=n; fol.count=n; scene.add(trunks); scene.add(fol); })();
+
+// grass tufts (instanced) in the central play zone
+(function(){ const N=4200, m=new THREE.Matrix4(), sc=new THREE.Vector3();
+  const g=new THREE.ConeGeometry(0.5,1.7,4); g.translate(0,0.85,0);
+  const inst=new THREE.InstancedMesh(g,new THREE.MeshStandardMaterial({color:0x437f3c,roughness:1,flatShading:true}),N);
+  let n=0; for(let i=0;i<N*2 && n<N;i++){ const a=Math.random()*Math.PI*2,d=Math.random()*CFG.playRadius*0.82;
+    const x=Math.cos(a)*d,z=Math.sin(a)*d,y=terrainHeight(x,z); if(y<6||y>190) continue;
+    const s=0.6+Math.random()*1.1; sc.set(s,s+Math.random()*0.8,s); m.makeRotationY(Math.random()*6.28); m.scale(sc); m.setPosition(x,y,z);
+    inst.setMatrixAt(n,m); n++; }
+  inst.count=n; scene.add(inst); })();
+
 // =====================================================================
 //  PLANE MODEL BUILDER
 // =====================================================================
@@ -484,6 +517,19 @@ function buildSoldier(teamGlow){
   const rifle=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.3,2.4),gear); rifle.position.set(0.5,0.5,-0.9); g.add(rifle);
   g.scale.setScalar(1.25);
   return { group:g };
+}
+
+// ---- FPS view-model (your own gun + arms, only your eye sees it) ----
+function buildViewModel(){
+  const g=new THREE.Group();
+  const gun=new THREE.MeshStandardMaterial({color:0x1b1f25, metalness:0.5, roughness:0.5});
+  const glove=new THREE.MeshStandardMaterial({color:0x2a2f25, metalness:0.2, roughness:0.85});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.22,1.3),gun); body.position.set(0,-0.04,-0.45); g.add(body);
+  const barrel=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.05,0.95,8),gun); barrel.rotation.x=Math.PI/2; barrel.position.set(0,0.02,-1.15); g.add(barrel);
+  const mag=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.4,0.18),gun); mag.position.set(0,-0.3,-0.35); mag.rotation.x=0.18; g.add(mag);
+  const optic=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.34,10),gun); optic.rotation.x=Math.PI/2; optic.position.set(0,0.16,-0.55); g.add(optic);
+  for(const sx of [1,-1]){ const arm=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,0.62),glove); arm.position.set(sx*0.14,-0.22,sx>0?-0.05:-0.5); arm.rotation.x=-0.45; g.add(arm); }
+  return { group:g, recoil:0 };
 }
 
 // =====================================================================
@@ -692,20 +738,33 @@ const sfx=(()=>{ let ctx=null,master=null,sfxg=null,musicg=null,muted=false,mt=n
     gn.gain.setValueAtTime(g,c.currentTime); gn.gain.exponentialRampToValueAtTime(0.001,c.currentTime+d); const f=c.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp||1000;
     s.connect(f); f.connect(gn); gn.connect(sfxg); s.start(); }
   const scale=[0,3,5,7,10], prog=[0,-2,3,-4];
-  function musicTick(){ const c=ensure(); if(!c||muted) return; const bar=Math.floor(step/8)%prog.length, root=110*Math.pow(2,prog[bar]/12);
+  function musicTick(){ const c=ensure(); if(!c||muted||buffers.music) return; const bar=Math.floor(step/8)%prog.length, root=110*Math.pow(2,prog[bar]/12);
     const n=scale[step%scale.length], f=root*Math.pow(2,n/12);
     tone(f,0.42,'triangle',0.05,null,musicg); tone(f*2,0.3,'sine',0.022,null,musicg);
     if(step%4===0) tone(root/2,0.7,'sawtooth',0.05,null,musicg);
     step++; }
-  return { init:ensure, ctx:()=>ctx,
-    gun:()=>tone(180,0.05,'square',0.03,90), mg:()=>tone(150,0.05,'square',0.032,75),
-    rifle:()=>{ tone(330,0.05,'square',0.045,130); noise(0.05,0.035,2200); },
-    cannon:()=>{ noise(0.5,0.55,520); tone(68,0.5,'sawtooth',0.16,38); },
-    hit:()=>tone(140,0.06,'sawtooth',0.045,80), missile:()=>tone(500,0.3,'sawtooth',0.06,120),
-    pickup:()=>tone(600,0.12,'sine',0.06,1100), jump:()=>tone(300,0.11,'sine',0.045,520),
-    explosion:()=>noise(0.5,0.5,900),
-    startMusic(){ ensure(); if(!mt) mt=setInterval(musicTick,300); },
-    stopMusic(){ if(mt){ clearInterval(mt); mt=null; } },
+  // ---- real-audio loader: drop files in audio/, else procedural fallback ----
+  const FILES={ music:'audio/music.mp3', explosion:'audio/explosion.mp3', cannon:'audio/cannon.mp3', rifle:'audio/rifle.mp3',
+    mg:'audio/mg.mp3', gun:'audio/gun.mp3', hit:'audio/hit.mp3', jump:'audio/jump.mp3', pickup:'audio/pickup.mp3', missile:'audio/missile.mp3' };
+  const buffers={}; let tried=false, musicSrc=null;
+  function loadAssets(){ const c=ensure(); if(!c||tried) return; tried=true;
+    for(const k in FILES){ fetch(FILES[k]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(ab=>c.decodeAudioData(ab))
+      .then(buf=>{ buffers[k]=buf; if(k==='music') startMusicBuffer(); }).catch(()=>{}); } }
+  function playBuf(k,g){ const c=ensure(); if(!c||!buffers[k]) return false; const s=c.createBufferSource(); s.buffer=buffers[k];
+    const gn=c.createGain(); gn.gain.value=g||1; s.connect(gn); gn.connect(sfxg); s.start(); return true; }
+  function startMusicBuffer(){ const c=ensure(); if(!c||!buffers.music||musicSrc) return; musicSrc=c.createBufferSource(); musicSrc.buffer=buffers.music; musicSrc.loop=true; musicSrc.connect(musicg); musicSrc.start(); }
+  return { init:ensure, ctx:()=>ctx, loadAssets,
+    gun:()=>{ if(!playBuf('gun',0.7)) tone(180,0.05,'square',0.03,90); },
+    mg:()=>{ if(!playBuf('mg',0.7)) tone(150,0.05,'square',0.032,75); },
+    rifle:()=>{ if(!playBuf('rifle',0.8)){ tone(330,0.05,'square',0.045,130); noise(0.05,0.035,2200); } },
+    cannon:()=>{ if(!playBuf('cannon',0.9)){ noise(0.5,0.55,520); tone(68,0.5,'sawtooth',0.16,38); } },
+    hit:()=>{ if(!playBuf('hit',0.7)) tone(140,0.06,'sawtooth',0.045,80); },
+    missile:()=>{ if(!playBuf('missile',0.8)) tone(500,0.3,'sawtooth',0.06,120); },
+    pickup:()=>{ if(!playBuf('pickup',0.8)) tone(600,0.12,'sine',0.06,1100); },
+    jump:()=>{ if(!playBuf('jump',0.7)) tone(300,0.11,'sine',0.045,520); },
+    explosion:()=>{ if(!playBuf('explosion',0.95)) noise(0.5,0.5,900); },
+    startMusic(){ ensure(); loadAssets(); if(buffers.music){ startMusicBuffer(); return; } if(!mt) mt=setInterval(musicTick,300); },
+    stopMusic(){ if(mt){ clearInterval(mt); mt=null; } if(musicSrc){ try{musicSrc.stop();}catch(e){} musicSrc=null; } },
     toggleMute(){ muted=!muted; if(master) master.gain.value=muted?0:0.9; return muted; } };
 })();
 
@@ -740,16 +799,21 @@ function makeEyeHUD(num){ const col=TEAMCOL[num];
       <div class="cg"><b class="c-alt">0</b><span>ALT</span></div>
       <div class="cg"><b class="c-hull">100</b><span>HULL</span></div>
       <div class="cg"><b class="c-amm">0</b><span>MSL</span></div>
-    </div>`;
+    </div>
+    <div class="scope"><div class="sring"></div><i class="sh"></i><i class="sv"></i></div>
+    <div class="tanksight"><div class="tring"></div><div class="tchev"></div><i class="th"></i></div>`;
   document.body.appendChild(eye);
   return { root:eye, hullBar:eye.querySelector('.hull>i'), boostBar:eye.querySelector('.boost>i'), score:eye.querySelector('.killrow b'),
     alt:eye.querySelector('.alt'), spd:eye.querySelector('.spd'), amt:eye.querySelector('.amt'),
     aimdot:eye.querySelector('.aimdot'), targetbox:eye.querySelector('.targetbox'), targetdist:eye.querySelector('.targetbox .dist'),
     offarrow:eye.querySelector('.offarrow'), radar:eye.querySelector('.radar').getContext('2d'),
     warning:eye.querySelector('.warning'), hitflash:eye.querySelector('.hitflash'),
-    adiInner:eye.querySelector('.adi .inner'), cSpd:eye.querySelector('.c-spd'), cAlt:eye.querySelector('.c-alt'), cHull:eye.querySelector('.c-hull'), cAmm:eye.querySelector('.c-amm') };
+    adiInner:eye.querySelector('.adi .inner'), cSpd:eye.querySelector('.c-spd'), cAlt:eye.querySelector('.c-alt'), cHull:eye.querySelector('.c-hull'), cAmm:eye.querySelector('.c-amm'),
+    scope:eye.querySelector('.scope'), tanksight:eye.querySelector('.tanksight') };
 }
 humans[0].hud=makeEyeHUD(1); humans[1].hud=makeEyeHUD(2);
+// per-player FPS view-models (each on its own layer so only that pilot's eye sees it)
+humans.forEach((h,i)=>{ h.vm=buildViewModel(); h.vm.group.visible=false; h.vm.group.traverse(o=>o.layers.set(3+i)); scene.add(h.vm.group); });
 const centerHud=document.getElementById('centerHud');
 function showEyes(v){ humans.forEach(p=>p.hud.root.style.display=v?'block':'none'); document.getElementById('divider').classList.toggle('hidden',!v); centerHud.classList.toggle('hidden',!v); }
 showEyes(false);
@@ -825,7 +889,7 @@ function startGame(){
     e.visuals.group.traverse(o=>o.layers.set(e.num));   // own model on its own render layer (cockpit/FPS hide)
     spawnHuman(e,i); updateBars(e); });
   // both eyes see the world (layer 0) + both planes (layers 1 & 2); cockpit view disables the pilot's own layer
-  humans.forEach(h=>{ h.cam.layers.enable(1); h.cam.layers.enable(2); });
+  humans.forEach((h,i)=>{ h.cam.layers.enable(1); h.cam.layers.enable(2); h.cam.layers.enable(3+i); });
   if(mode==='coop'){ teamLives=5; wave=0; waveState='intermission'; waveTimer=2.5; }
   setup.classList.add('hidden'); gameoverEl.classList.add('hidden'); showEyes(true);
   gameState='playing'; sfx.init(); sfx.startMusic();
@@ -1216,7 +1280,7 @@ function fireRifle(e){
 // =====================================================================
 const _cp=new THREE.Vector3(),_lk=new THREE.Vector3(),_wUp=new THREE.Vector3(0,1,0),_back=new THREE.Vector3(),_rax=new THREE.Vector3(),_he=new THREE.Euler(),_hq=new THREE.Quaternion(),_flat=new THREE.Vector3(),_he2=new THREE.Euler();
 function updateTankCam(e,dt){
-  e.cam.layers.enable(e.num); e.hud&&e.hud.root.classList.remove('cockpit');
+  e.cam.layers.enable(e.num); e.hud&&e.hud.root.classList.remove('cockpit'); e.cam.near=1; if(e.vm) e.vm.group.visible=false;
   const aim=aimVec(e.turretYaw,e.turretPitch); _flat.set(aim.x,0,aim.z); if(_flat.lengthSq()<1e-4) _flat.set(0,0,-1); _flat.normalize();
   const dist=lerp(20,12,e.aim), high=lerp(9,5.5,e.aim);
   _cp.copy(e.pos).addScaledVector(_flat,-dist).addScaledVector(_wUp,high);
@@ -1227,15 +1291,23 @@ function updateTankCam(e,dt){
 }
 function updateInfCam(e,dt){
   e.cam.layers.disable(e.num); e.hud&&e.hud.root.classList.remove('cockpit');
+  e.cam.near=0.35;
   e.cam.position.copy(e.pos); e.camInit=true;
   e.cam.quaternion.setFromEuler(_he2.set(e.turretPitch,e.heading,0,'YXZ'));
   e.cam.up.set(0,1,0);
-  e.cam.fov=lerp(74,38,e.aim);
+  e.cam.fov=lerp(74,34,e.aim);
+  // view-model: hip -> aim-down-sights, with idle bob
+  if(e.vm){ const vm=e.vm.group; vm.visible=e.alive;
+    const ads=e.aim, bob=Math.sin(clock.elapsedTime*9)*0.012*(1-ads)*(Math.abs(e.speed)>2?1:0.25);
+    vm.position.copy(e.cam.position); vm.quaternion.copy(e.cam.quaternion);
+    vm.translateX(lerp(0.34,0.0,ads)); vm.translateY(lerp(-0.30,-0.11,ads)+bob); vm.translateZ(lerp(-0.5,-0.46,ads));
+  }
 }
 const CAM_MAX_YAW=2.6, CAM_MAX_PITCH=0.85;   // how far the right stick can swing the view (rad)
 function updateCamera(e, dt){
   if(e.kind==='tank') return updateTankCam(e,dt);
   if(e.kind==='infantry') return updateInfCam(e,dt);
+  e.cam.near=1; if(e.vm) e.vm.group.visible=false;
   _fwd.set(0,0,-1).applyQuaternion(e.quat);
   // ease free-look angles (right stick) toward their targets (recenters when released)
   const ka=1-Math.exp(-dt*12);
@@ -1286,6 +1358,9 @@ function updateEyeHUD(e, vw, vh){
   if(e.kind==='tank'){ h.boostBar.style.width=(clamp(1-Math.max(0,e.mainCd)/TANK.mainReload,0,1)*100)+'%'; h.amt.textContent='🛢 '+e.ammo; h.alt.textContent='—'; h.spd.textContent=Math.round(Math.abs(e.speed)); }
   else if(e.kind==='infantry'){ h.boostBar.style.width=(e.stamina*100)+'%'; h.amt.textContent=(e.reloading>0?'RELOAD…':e.mag+'/'+INF.mag); h.alt.textContent='—'; h.spd.textContent=Math.round(Math.abs(e.speed)); }
   else { h.boostBar.style.width=(e.boostFuel*100)+'%'; h.amt.textContent='🚀 '+e.ammo; h.alt.textContent=Math.max(0,Math.round(e.pos.y-groundLevel(e.pos.x,e.pos.z))); h.spd.textContent=Math.round(e.speed); }
+  // ADS overlays: sniper scope (infantry) / gunner sight (tank)
+  h.scope.classList.toggle('on', e.kind==='infantry' && e.aim>0.5);
+  h.tanksight.classList.toggle('on', e.kind==='tank' && e.aim>0.5);
 
   // cockpit instruments (artificial horizon + panel gauges)
   if(e.camMode==='cockpit'){
