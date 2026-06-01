@@ -512,17 +512,13 @@ window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>keys.clear());
 // grab the first connected pad not already claimed by the other gamepad player
 function padConnected(p){ return p && p.connected!==false; }
-function claimGamepad(e){
-  const pads=navigator.getGamepads?navigator.getGamepads():[];
-  const used=new Set();
-  for(const o of humans){ if(o!==e && o.scheme==='gamepad' && o.gamepadIndex>=0 && padConnected(pads[o.gamepadIndex])) used.add(o.gamepadIndex); }
-  for(let i=0;i<pads.length;i++){ if(padConnected(pads[i]) && !used.has(i)){ e.gamepadIndex=i; return pads[i]; } }
-  return null;
-}
+// every connected pad, in browser index order
+function connectedPads(){ const pads=navigator.getGamepads?navigator.getGamepads():[]; const list=[]; for(let i=0;i<pads.length;i++) if(padConnected(pads[i])) list.push(pads[i]); return list; }
+// which gamepad-player is this (0 = first to use a controller, 1 = second)
+function gamepadRank(e){ let r=0; for(const h of humans){ if(h.scheme==='gamepad'){ if(h===e) return r; r++; } } return 0; }
 function readInput(e){
-  if(e.scheme==='gamepad'){ const pads=navigator.getGamepads?navigator.getGamepads():[];
-    let gp = (e.gamepadIndex>=0 && padConnected(pads[e.gamepadIndex])) ? pads[e.gamepadIndex] : null;
-    if(!gp){ e.gamepadIndex=-1; gp = claimGamepad(e); }   // self-heal: bind a controller as soon as it appears (after its first button press)
+  if(e.scheme==='gamepad'){
+    const gp = connectedPads()[gamepadRank(e)];   // stateless: Nth gamepad-player -> Nth connected controller
     if(!gp) return {pitch:0,roll:0,fire:false,boost:false,missile:false};
     const dz=CFG.deadzone; let lx=gp.axes[0]||0,ly=gp.axes[1]||0; if(Math.abs(lx)<dz)lx=0; if(Math.abs(ly)<dz)ly=0;
     const fire=(gp.buttons[0]&&gp.buttons[0].pressed)||(gp.buttons[7]&&gp.buttons[7].value>0.3);
@@ -702,18 +698,15 @@ function refreshControlUI(){
   document.querySelectorAll('.opt').forEach(btn=>{ const pl=+btn.dataset.player, scheme=btn.dataset.scheme, me=humans[pl-1], other=humans[pl===1?1:0];
     btn.classList.toggle('sel', me.scheme===scheme);
     btn.classList.toggle('disabled', (scheme==='wasd'||scheme==='ijkl') && other.scheme===scheme); });
+  const cp=connectedPads();
   humans.forEach((p,i)=>{ const h=document.getElementById('p'+(i+1)+'hint');
-    if(p.scheme==='gamepad'){ if(p.gamepadIndex<0) claimGamepad(p);
-      const pads=navigator.getGamepads?navigator.getGamepads():[];
-      h.textContent=(p.gamepadIndex>=0 && pads[p.gamepadIndex]) ? '🎮 Controller '+(p.gamepadIndex+1)+' ready' : '⚠ Press a button on this controller to connect it';
+    if(p.scheme==='gamepad'){ const pad=cp[gamepadRank(p)];
+      h.textContent = pad ? '🎮 Controller ready' : '⚠ Press a button on this controller to connect it';
     } else if(p.scheme) h.textContent='Ready'; else h.textContent='Choose controls'; });
   updateGpDiag();
   validateStart();
 }
-function assignGamepads(){
-  humans.forEach(p=>{ if(p.scheme==='gamepad') p.gamepadIndex=-1; });   // clear, then claim distinct connected pads
-  humans.forEach(p=>{ if(p.scheme==='gamepad') claimGamepad(p); });
-}
+function assignGamepads(){ /* no-op: controllers are resolved statelessly per-frame in readInput */ }
 let _gpSig='';
 function updateGpDiag(){
   const el=document.getElementById('gpDiag'); if(!el) return;
@@ -734,8 +727,8 @@ document.querySelectorAll('.mode').forEach(m=>m.addEventListener('click',()=>{ m
 startBtn.addEventListener('click',()=>{ if(!startBtn.disabled){ assignGamepads(); startGame(); } });
 document.getElementById('rematchBtn').addEventListener('click',()=>{ assignGamepads(); startGame(); });
 document.getElementById('menuBtn').addEventListener('click',()=>{ gameState='setup'; gameoverEl.classList.add('hidden'); showEyes(false); setup.classList.remove('hidden'); refreshPilotBar(); renderPlaneSel(0); renderPlaneSel(1); refreshControlUI(); });
-window.addEventListener('gamepadconnected',e=>{ humans.forEach(p=>{ if(p.scheme==='gamepad'&&p.gamepadIndex<0) claimGamepad(p); }); if(gameState==='setup') refreshControlUI(); });
-window.addEventListener('gamepaddisconnected',e=>{ humans.forEach(p=>{ if(p.scheme==='gamepad'&&p.gamepadIndex===e.gamepad.index) p.gamepadIndex=-1; }); if(gameState==='setup') refreshControlUI(); });
+window.addEventListener('gamepadconnected',()=>{ if(gameState==='setup') refreshControlUI(); });
+window.addEventListener('gamepaddisconnected',()=>{ if(gameState==='setup') refreshControlUI(); });
 
 function updateBars(e){ if(!e.hud) return; e.hud.hullBar.style.width=Math.max(0,e.hull/e.stats.hull*100)+'%'; e.hud.score.textContent=e.score; }
 
