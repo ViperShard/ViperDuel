@@ -166,6 +166,7 @@
   .bombsight:before,.bombsight:after{ content:''; position:absolute; background:rgba(255,210,80,0.95); }
   .bombsight:before{ left:50%; top:-10px; width:2px; height:60px; transform:translateX(-50%); }
   .bombsight:after{ top:50%; left:-10px; height:2px; width:60px; transform:translateY(-50%); }
+  .bombsight b{ position:absolute; top:100%; left:50%; transform:translateX(-50%); margin-top:8px; font-size:10px; font-weight:700; letter-spacing:2px; color:#ffd250; white-space:nowrap; text-shadow:0 0 6px rgba(255,200,60,0.6); }
 
   /* center top HUD */
   #centerHud{ position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:5; text-align:center; pointer-events:none; }
@@ -847,7 +848,7 @@ function makeEyeHUD(num){ const col=TEAMCOL[num];
     </div>
     <div class="scope"><div class="sring"></div><i class="sh"></i><i class="sv"></i></div>
     <div class="tanksight"><div class="tring"></div><div class="tchev"></div><i class="th"></i></div>
-    <div class="bombsight"></div>`;
+    <div class="bombsight"><b>BOMB SIGHT</b></div>`;
   document.body.appendChild(eye);
   return { root:eye, hullBar:eye.querySelector('.hull>i'), boostBar:eye.querySelector('.boost>i'), score:eye.querySelector('.killrow b'),
     alt:eye.querySelector('.alt'), spd:eye.querySelector('.spd'), amt:eye.querySelector('.amt'),
@@ -1624,6 +1625,15 @@ function updateCamera(e, dt){
   e.camYaw   += ((e.lookX||0)*CAM_MAX_YAW   - e.camYaw)*ka;
   e.camPitch += ((e.lookY||0)*CAM_MAX_PITCH - e.camPitch)*ka;
   const ownLayer=e.num||1;   // hide own plane only in cockpit view
+
+  // BOMB SIGHT view: high downward angle centred on the predicted bomb impact
+  if(e.bombSight){ const imp=bombImpact(e);
+    if(imp){ e.cam.layers.enable(ownLayer); e.hud&&e.hud.root.classList.remove('cockpit');
+      _flat.set(_fwd.x,0,_fwd.z); if(_flat.lengthSq()<1e-4) _flat.set(0,0,-1); _flat.normalize();
+      _cp.copy(e.pos).addScaledVector(_wUp,52).addScaledVector(_flat,-14);
+      if(!e.camInit){ e.cam.position.copy(_cp); e.camInit=true; } else e.cam.position.lerp(_cp, 1-Math.exp(-dt*7));
+      e.cam.up.set(0,1,0); e.cam.lookAt(imp); e.cam.fov=58; return; }
+  }
 
   if(e.camMode==='cockpit'){
     e.cam.layers.disable(ownLayer);
