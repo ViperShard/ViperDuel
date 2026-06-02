@@ -216,6 +216,13 @@
   </div>
   <div class="modedesc" id="modedesc">Versus — dogfight head-to-head. First to 7 kills wins.</div>
 
+  <div class="modes" id="qualsel">
+    <div class="count" data-q="low">⚙ LOW</div>
+    <div class="count" data-q="medium">⚙ MEDIUM</div>
+    <div class="count" data-q="high">⚙ HIGH</div>
+  </div>
+  <div class="modedesc">Graphics — <b>Low</b> recommended for integrated GPUs / 4-player. Changing reloads the game.</div>
+
   <div class="players" id="players"></div>
 
   <div id="gpDiag" class="small-note" style="color:#8aa0c8; margin-top:0; margin-bottom:10px;"></div>
@@ -353,14 +360,25 @@ function groundLevel(x,z){ return Math.max(terrainHeight(x,z), CFG.seaLevel); }
 // =====================================================================
 //  RENDERER / SCENE
 // =====================================================================
-const renderer=new THREE.WebGLRenderer({ canvas:document.getElementById('gl'), antialias:true, powerPreference:'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+// ---- graphics quality presets (chosen on the menu, persisted) ----
+const QPRESETS={
+  low:    { pr:0.62, aa:false, terr:120, trees:120, grass:1000, botCap:18, fog:7000 },
+  medium: { pr:0.90, aa:false, terr:168, trees:320, grass:2800, botCap:28, fog:9000 },
+  high:   { pr:Math.min(window.devicePixelRatio||1,1.5), aa:true, terr:200, trees:520, grass:4200, botCap:38, fog:9800 }
+};
+let QKEY=(()=>{ try{ return localStorage.getItem('viperduel_quality')||'low'; }catch(e){ return 'low'; } })();
+if(!QPRESETS[QKEY]) QKEY='low';
+const QUALITY=QPRESETS[QKEY];
+CFG.terrainSegs=QUALITY.terr;
+
+const renderer=new THREE.WebGLRenderer({ canvas:document.getElementById('gl'), antialias:QUALITY.aa, powerPreference:'high-performance' });
+renderer.setPixelRatio(QUALITY.pr);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.05; renderer.autoClear=false;
 
 const SKY_TOP=new THREE.Color(0x2f6fc4), SKY_HORIZON=new THREE.Color(0xbcd3ea);
 const scene=new THREE.Scene();
-scene.fog=new THREE.Fog(SKY_HORIZON.getHex(),3200,9800); scene.background=SKY_HORIZON.clone();
+scene.fog=new THREE.Fog(SKY_HORIZON.getHex(),3200,QUALITY.fog); scene.background=SKY_HORIZON.clone();
 
 function glowTexture(){ const c=document.createElement('canvas'); c.width=c.height=128; const ctx=c.getContext('2d');
   const g=ctx.createRadialGradient(64,64,0,64,64,64); g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(0.3,'rgba(255,255,255,0.6)'); g.addColorStop(1,'rgba(255,255,255,0)');
@@ -402,7 +420,7 @@ const sun=makeGlow(0xfff0c0,1500); sun.position.copy(sunLight.position.clone().s
     s.position.set(Math.cos(a)*d,360+Math.random()*680,Math.sin(a)*d); scene.add(s); } })();
 
 // trees (instanced) — scattered on land, skipping water and high mountains
-(function(){ const N=520, m=new THREE.Matrix4(), sc=new THREE.Vector3();
+(function(){ const N=QUALITY.trees, m=new THREE.Matrix4(), sc=new THREE.Vector3();
   const trunkGeo=new THREE.CylinderGeometry(0.5,0.85,6,6); trunkGeo.translate(0,3,0);
   const folGeo=new THREE.ConeGeometry(3.4,9,7); folGeo.translate(0,9.5,0);
   const trunks=new THREE.InstancedMesh(trunkGeo,new THREE.MeshStandardMaterial({color:0x5b452c,roughness:1}),N);
@@ -414,7 +432,7 @@ const sun=makeGlow(0xfff0c0,1500); sun.position.copy(sunLight.position.clone().s
   trunks.count=n; fol.count=n; scene.add(trunks); scene.add(fol); })();
 
 // grass tufts (instanced) in the central play zone
-(function(){ const N=4200, m=new THREE.Matrix4(), sc=new THREE.Vector3();
+(function(){ const N=QUALITY.grass, m=new THREE.Matrix4(), sc=new THREE.Vector3();
   const g=new THREE.ConeGeometry(0.5,1.7,4); g.translate(0,0.85,0);
   const inst=new THREE.InstancedMesh(g,new THREE.MeshStandardMaterial({color:0x437f3c,roughness:1,flatShading:true}),N);
   let n=0; for(let i=0;i<N*2 && n<N;i++){ const a=Math.random()*Math.PI*2,d=Math.random()*CFG.playRadius*0.82;
@@ -549,11 +567,12 @@ function buildSoldier(teamGlow){
 // cheap soldier for enemy hordes (few meshes -> handles 30+ on screen)
 const _liteSuit=new THREE.MeshStandardMaterial({color:0x5a2622, metalness:0.2, roughness:0.85});
 const _liteGear=new THREE.MeshStandardMaterial({color:0x2a1815, metalness:0.3, roughness:0.7});
-const _liteTorso=new THREE.BoxGeometry(1.5,2.0,0.9), _liteHelm=new THREE.SphereGeometry(0.6,8,6), _liteRifle=new THREE.BoxGeometry(0.2,0.28,2.2);
+const _liteTorso=new THREE.BoxGeometry(1.5,2.0,0.9), _liteHelm=new THREE.SphereGeometry(0.6,8,6), _liteRifle=new THREE.BoxGeometry(0.2,0.28,2.2), _liteBandGeo=new THREE.BoxGeometry(1.55,0.22,0.95);
+const _liteBand=new THREE.MeshStandardMaterial({color:0xff7a7a, emissive:0xff7a7a, emissiveIntensity:0.7});   // shared (enemy) -> no per-soldier material leak
 function buildSoldierLite(teamGlow){ const g=new THREE.Group();
   const t=new THREE.Mesh(_liteTorso,_liteSuit); t.position.y=0.4; g.add(t);
   const h=new THREE.Mesh(_liteHelm,_liteGear); h.position.y=1.8; g.add(h);
-  const band=new THREE.Mesh(new THREE.BoxGeometry(1.55,0.22,0.95), new THREE.MeshStandardMaterial({color:teamGlow,emissive:teamGlow,emissiveIntensity:0.7})); band.position.y=1.2; g.add(band);
+  const band=new THREE.Mesh(_liteBandGeo,_liteBand); band.position.y=1.2; g.add(band);
   const r=new THREE.Mesh(_liteRifle,_liteGear); r.position.set(0.5,0.5,-0.9); g.add(r);
   g.scale.setScalar(1.25); return { group:g }; }
 
@@ -880,7 +899,7 @@ showEyes(false);
 // =====================================================================
 let gameState='loading', mode='versus';
 let teamLives=0, wave=0, waveState='', waveTimer=0, waveQuota=0, waveSpawned=0, waveKilled=0, spawnTimer=0;
-function maxAliveBots(){ return Math.min(38, 24 + NUM_PLAYERS*4 + wave); }   // concurrency cap (perf)
+function maxAliveBots(){ return Math.min(QUALITY.botCap, 24 + NUM_PLAYERS*4 + wave); }   // concurrency cap (perf, scales w/ graphics preset)
 const setup=document.getElementById('setup'), gameoverEl=document.getElementById('gameover'), startBtn=document.getElementById('startBtn');
 
 function headingToCenter(pos){ const dx=-pos.x,dz=-pos.z,len=Math.hypot(dx,dz)||1; return Math.atan2(-dx/len,-dz/len); }
@@ -1122,8 +1141,11 @@ function updateGpDiag(){
   el.innerHTML=msg+`<br><span style="opacity:.65;font-size:11px">focus: ${r.focused?'yes':'NO → click the page first'} · embedded: ${(r.inIframe||r.embeddedApp)?'yes':'no'} · https: ${r.secure?'yes':'no'} · api: ${r.hasApi?'yes':'no'} · ${r.browser}</span>`;
 }
 
-document.querySelectorAll('.count').forEach(c=>c.addEventListener('click',()=>{ NUM_PLAYERS=+c.dataset.n;
-  document.querySelectorAll('.count').forEach(x=>x.classList.toggle('on',x===c)); refreshSetup(); }));
+document.querySelectorAll('#countsel .count').forEach(c=>c.addEventListener('click',()=>{ NUM_PLAYERS=+c.dataset.n;
+  document.querySelectorAll('#countsel .count').forEach(x=>x.classList.toggle('on',x===c)); refreshSetup(); }));
+// graphics quality selector (persists + reloads to apply renderer/density changes)
+document.querySelectorAll('#qualsel .count').forEach(c=>{ c.classList.toggle('on', c.dataset.q===QKEY);
+  c.addEventListener('click',()=>{ try{ localStorage.setItem('viperduel_quality', c.dataset.q); }catch(e){} location.reload(); }); });
 document.querySelectorAll('.mode').forEach(m=>m.addEventListener('click',()=>{ mode=m.dataset.mode;
   document.querySelectorAll('.mode').forEach(x=>x.classList.toggle('on',x===m));
   document.getElementById('modedesc').textContent = mode==='versus' ? 'Versus — free-for-all dogfight. First to 7 kills wins.' : 'Co-op — team up vs waves of enemy fighters. Shared lives, survive as long as you can.'; }));
