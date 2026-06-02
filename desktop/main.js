@@ -1,6 +1,12 @@
 const { app, BrowserWindow, Menu } = require('electron');
 const path = require('path');
 
+// Linux AppImages can't set the root-owned SUID sandbox perms Chromium wants,
+// which makes it abort on launch. This is a local offline game (no untrusted
+// web content), so disable the sandbox so it runs from a plain double-click.
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-setuid-sandbox');
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1366,
