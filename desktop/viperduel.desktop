@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ViperDuel
+GenericName=Combat Game
+Comment=Split-screen combined-arms combat — planes, tanks, infantry, navy
+Exec=/home/kuiu-mc-crank/ViperDuel.AppImage
+Icon=/home/kuiu-mc-crank/.local/share/icons/viperduel.png
+Terminal=false
+Categories=Game;ActionGame;
+StartupWMClass=ViperDuel
+StartupNotify=true
